@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import threading
 from collections import deque
 from pathlib import Path
@@ -54,6 +55,11 @@ class AuditLogger:
         with self._lock:
             fp = self._ensure_open()
             fp.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+            # flush + fsync so a container SIGKILL between line-buffer flush
+            # and kernel writeback can't lose the row. Bind-mounted volumes on
+            # Docker Desktop / WSL2 do not honour writeback timing reliably.
+            fp.flush()
+            os.fsync(fp.fileno())
             self._recent.append(row)
         if self._store is not None:
             try:

@@ -96,10 +96,18 @@ class Store:
         with self._connect() as c:
             c.executescript(SCHEMA)
             c.execute("PRAGMA journal_mode = WAL")
+            # Bounded WAL: checkpoint into the main DB every 100 pages so a lost
+            # WAL never strands more than a small batch of recent rows.
+            c.execute("PRAGMA wal_autocheckpoint = 100")
 
     def _connect(self) -> sqlite3.Connection:
         c = sqlite3.connect(self.path, isolation_level=None, check_same_thread=False)
         c.row_factory = sqlite3.Row
+        # synchronous is per-connection. FULL forces fsync on every commit so
+        # writes survive a container SIGKILL or host crash, at a cost of ~5-10ms
+        # per insert. Worth it — Docker Desktop bind mounts on Windows have
+        # buffered writes that NORMAL durability does not flush in time.
+        c.execute("PRAGMA synchronous = FULL")
         return c
 
     def insert_decision(self, row: dict[str, Any]) -> None:

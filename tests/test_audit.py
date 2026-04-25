@@ -14,6 +14,27 @@ from med_routing.routers.self_consistency import SelfConsistencyRouter
 from tests.conftest import FakeOpenAIClient, make_completion
 
 
+def test_audit_logger_fsyncs_each_row(tmp_path: Path, monkeypatch):
+    """Each log() call must call os.fsync so writes survive a container kill."""
+    import os
+
+    fsynced: list[int] = []
+    real_fsync = os.fsync
+    monkeypatch.setattr(os, "fsync", lambda fd: fsynced.append(fd) or real_fsync(fd))
+
+    logger = AuditLogger(root=tmp_path)
+    logger.log({"ts": "t", "prompt_sha": "x", "router": "r", "score": 0.1})
+    logger.log({"ts": "t2", "prompt_sha": "y", "router": "r", "score": 0.2})
+
+    assert len(fsynced) == 2
+
+    # And the rows are actually on disk after the calls return.
+    audit_file = next(tmp_path.glob("decisions-*.jsonl"))
+    lines = audit_file.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2
+    assert json.loads(lines[1])["prompt_sha"] == "y"
+
+
 def test_processor_registry_known_models():
     assert get_processor("gpt-4o-mini").entity == "OpenAI, Inc."
     assert get_processor("gpt-4o-mini").region == "US"

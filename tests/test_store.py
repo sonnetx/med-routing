@@ -13,6 +13,18 @@ from med_routing.store import DECISION_COLS, EVAL_COLS, Store, iter_csv
 from tests.conftest import FakeOpenAIClient, make_completion
 
 
+def test_store_uses_full_synchronous_for_durability(tmp_path: Path):
+    """Bind-mounted volumes on Docker Desktop / WSL2 don't honour the default
+    NORMAL synchronous reliably, so we force FULL on every connection."""
+    store = Store(tmp_path / "x.db")
+    with store._connect() as c:
+        # synchronous = 2 = FULL, see https://www.sqlite.org/pragma.html#pragma_synchronous
+        sync = c.execute("PRAGMA synchronous").fetchone()[0]
+        journal = c.execute("PRAGMA journal_mode").fetchone()[0]
+    assert sync == 2, f"expected synchronous=FULL (2), got {sync}"
+    assert journal.lower() == "wal"
+
+
 def test_store_inserts_and_queries_decision(tmp_path: Path):
     store = Store(tmp_path / "x.db")
     row = {
