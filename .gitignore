@@ -24,4 +24,7 @@ hf_cache/
 # Test scratch dirs
 audit_test_tmp/
 
+# Pickled artifacts produced by med_routing.train.fit
+models/
+
 .DS_Store
