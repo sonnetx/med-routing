@@ -115,6 +115,18 @@
   .stat { background: #0d1117; border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
   .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
   .stat .value { font-size: 22px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  .hist-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+               gap: 12px; margin-bottom: 16px; }
+  .hist-card { background: #0d1117; border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+  .hist-card .title { font-size: 12px; color: var(--text); margin-bottom: 6px;
+                      font-family: ui-monospace, monospace; }
+  .hist-card .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  svg.hist { width: 100%; height: 90px; display: block; }
+  svg.hist rect { fill: var(--accent); fill-opacity: 0.55; }
+  svg.hist .axis { stroke: var(--line); }
+  svg.hist .axis-text { fill: var(--muted); font-size: 10px; font-family: ui-monospace, monospace; }
+  svg.hist .rec { stroke: var(--weak); stroke-width: 1.5; stroke-dasharray: 3,3; }
 </style>
 </head>
 <body>
@@ -181,8 +193,18 @@
     <label style="margin-top:10px">Routers to evaluate</label>
     <div class="pill-row" id="router-list"></div>
 
-    <label style="margin-top:14px">Thresholds to sweep</label>
-    <div class="pill-row" id="threshold-list"></div>
+    <label style="margin-top:14px; display: flex; align-items: center; gap: 10px;">
+      <span>Thresholds to sweep</span>
+      <label class="check" style="margin: 0">
+        <input type="checkbox" id="auto-thresholds" checked />
+        <span>auto (per-router quantiles)</span>
+      </label>
+    </label>
+    <div class="pill-row" id="threshold-list" style="display:none"></div>
+    <div class="muted" style="margin-top:6px; font-size: 11px">
+      Auto-mode samples each router's own observed score distribution. A fixed list like 0.2…0.7 misses
+      where a router's scores actually live and collapses the Pareto chart to a single point.
+    </div>
 
     <div class="row" style="margin-top: 14px">
       <button id="btn-evaluate">Run evaluation</button>
@@ -202,6 +224,14 @@
       <div class="stat"><div class="label">Strong-only accuracy</div><div class="value" id="stat-strong-acc">—</div></div>
       <div class="stat"><div class="label">Best cascade savings</div><div class="value" id="stat-savings">—</div></div>
     </div>
+
+    <h2 style="margin-top: 18px">router score distribution</h2>
+    <p class="muted" style="margin-top: -4px">
+      Where each router's uncertainty scores actually land. The dashed line marks the recommended threshold.
+      If all the mass is on one side of the line, escalation rate is 0% or 100% — that's why the Pareto
+      chart can collapse to a single point.
+    </p>
+    <div class="hist-grid" id="hist-grid"></div>
 
     <div class="chart-wrap">
       <svg class="chart" id="chart" viewBox="0 0 700 360" preserveAspectRatio="none"></svg>
@@ -279,6 +309,7 @@ function resetDownstreamUI() {
   clearChildren($("threshold-list"));
   clearChildren($("recommendation"));
   clearChildren($("report-body"));
+  clearChildren($("hist-grid"));
   clearChildren($("gen-status"));
   clearChildren($("eval-status"));
   $("ds-name").textContent = "";
@@ -445,14 +476,27 @@ function showEvaluatePanel() {
     const lbl = el("label", { class: "check" }, cb, document.createTextNode(" " + t.toFixed(1)));
     tl.appendChild(lbl);
   }
+  // Auto toggle hides/shows the explicit threshold pills.
+  const auto = $("auto-thresholds");
+  const syncAuto = () => { tl.style.display = auto.checked ? "none" : ""; };
+  auto.removeEventListener("change", syncAuto);
+  auto.addEventListener("change", syncAuto);
+  syncAuto();
   $("panel-evaluate").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function evaluate() {
   const routers = [...selectedRouters];
-  const thresholds = [...selectedThresholds].sort((a, b) => a - b);
-  if (!routers.length || !thresholds.length) {
-    $("evaluate-err").textContent = "Select at least one router and one threshold.";
+  // Empty thresholds list = auto-mode on the server (per-router quantiles).
+  const thresholds = $("auto-thresholds").checked
+    ? []
+    : [...selectedThresholds].sort((a, b) => a - b);
+  if (!routers.length) {
+    $("evaluate-err").textContent = "Select at least one router.";
+    return;
+  }
+  if (!$("auto-thresholds").checked && !thresholds.length) {
+    $("evaluate-err").textContent = "Select at least one threshold or enable auto.";
     return;
   }
   $("btn-evaluate").disabled = true;
@@ -513,6 +557,7 @@ function renderReport(report) {
     recBox.appendChild(el("div", { class: "muted" },
       "No configuration on the Pareto frontier beats the weak-only baseline. Try adding more thresholds or routers."));
   }
+  renderHistograms(report);
   drawChart(report);
 
   const tbody = $("report-body");
@@ -532,6 +577,85 @@ function renderReport(report) {
     tbody.appendChild(tr);
   });
   $("panel-report").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderHistograms(report) {
+  const grid = $("hist-grid");
+  clearChildren(grid);
+  const perQ = report.per_question || [];
+  if (!perQ.length) return;
+  const routers = report.routers || [];
+  const recBy = {};
+  if (report.recommended) recBy[report.recommended.router] = report.recommended.threshold;
+
+  for (const router of routers) {
+    const scores = perQ
+      .map(q => (q.router_scores || {})[router])
+      .filter(v => typeof v === "number" && isFinite(v));
+    if (!scores.length) continue;
+    const card = el("div", { class: "hist-card" });
+    card.appendChild(el("div", { class: "title" }, router));
+    card.appendChild(buildHistogramSvg(scores, recBy[router]));
+    const min = Math.min(...scores), max = Math.max(...scores);
+    const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+    card.appendChild(el("div", { class: "meta" },
+      `n=${scores.length} · min=${min.toFixed(3)} · mean=${mean.toFixed(3)} · max=${max.toFixed(3)}` +
+      (recBy[router] != null ? ` · rec τ=${Number(recBy[router]).toFixed(3)}` : "")));
+    grid.appendChild(card);
+  }
+}
+
+function buildHistogramSvg(scores, threshold) {
+  const W = 320, H = 90, m = { l: 4, r: 4, t: 4, b: 14 };
+  const pw = W - m.l - m.r;
+  const ph = H - m.t - m.b;
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("class", "hist");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+  // Always bin over [0, 1] so histograms are comparable across routers and the
+  // recommended-threshold marker has a fixed reference frame.
+  const N_BINS = 20;
+  const counts = new Array(N_BINS).fill(0);
+  for (const s of scores) {
+    const v = Math.max(0, Math.min(1 - 1e-9, s));
+    counts[Math.min(N_BINS - 1, Math.floor(v * N_BINS))]++;
+  }
+  const maxC = Math.max(...counts, 1);
+  const bw = pw / N_BINS;
+  for (let i = 0; i < N_BINS; i++) {
+    const h = (counts[i] / maxC) * ph;
+    const r = document.createElementNS(SVGNS, "rect");
+    r.setAttribute("x", String(m.l + i * bw + 0.5));
+    r.setAttribute("y", String(m.t + ph - h));
+    r.setAttribute("width", String(Math.max(0, bw - 1)));
+    r.setAttribute("height", String(h));
+    svg.appendChild(r);
+  }
+  // x axis baseline
+  const ax = document.createElementNS(SVGNS, "line");
+  ax.setAttribute("class", "axis");
+  ax.setAttribute("x1", String(m.l)); ax.setAttribute("x2", String(m.l + pw));
+  ax.setAttribute("y1", String(m.t + ph)); ax.setAttribute("y2", String(m.t + ph));
+  svg.appendChild(ax);
+  for (const tick of [0, 0.25, 0.5, 0.75, 1]) {
+    const x = m.l + tick * pw;
+    const t = document.createElementNS(SVGNS, "text");
+    t.setAttribute("class", "axis-text");
+    t.setAttribute("x", String(x)); t.setAttribute("y", String(H - 2));
+    t.setAttribute("text-anchor", tick === 0 ? "start" : tick === 1 ? "end" : "middle");
+    t.appendChild(document.createTextNode(tick.toFixed(2)));
+    svg.appendChild(t);
+  }
+  if (threshold != null && threshold >= 0 && threshold <= 1.001) {
+    const tx = m.l + Math.min(1, threshold) * pw;
+    const ln = document.createElementNS(SVGNS, "line");
+    ln.setAttribute("class", "rec");
+    ln.setAttribute("x1", String(tx)); ln.setAttribute("x2", String(tx));
+    ln.setAttribute("y1", String(m.t)); ln.setAttribute("y2", String(m.t + ph));
+    svg.appendChild(ln);
+  }
+  return svg;
 }
 
 const SVGNS = "http://www.w3.org/2000/svg";

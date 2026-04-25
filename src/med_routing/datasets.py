@@ -223,12 +223,16 @@ class EvalReport:
     n: int
     routers: list[str]
     thresholds: list[float]
+    thresholds_by_router: dict[str, list[float]]
     points: list[dict[str, Any]]
     pareto_indices: list[int]
     recommended: dict[str, Any] | None
     weak_only: dict[str, Any]
     strong_only: dict[str, Any]
     judge_model: str
+    # Per-question raw values: lets the UI render score histograms, calibration,
+    # and selective accuracy without re-running the sweep.
+    per_question: list[dict[str, Any]] = field(default_factory=list)
     completed_at: float = field(default_factory=time.time)
 
 
@@ -244,6 +248,27 @@ def _pareto_front(points: list[dict[str, Any]]) -> list[int]:
             front.append(i)
             best_acc = points[i]["accuracy"]
     return front
+
+
+def auto_thresholds_for_router(scores: list[float], *, max_points: int = 12) -> list[float]:
+    """Pick thresholds spanning the observed score distribution.
+
+    Uses unique observed scores capped at `max_points` evenly-spaced quantiles,
+    plus 0.0 and 1.001 endpoints (escalate-everything / escalate-nothing). With
+    a fixed list like [0.2…0.7], a router whose scores live near 0.05 produces
+    zero escalation at every threshold — the Pareto chart collapses to one
+    point. Sampling from the actual score distribution avoids that.
+    """
+    if not scores:
+        return [0.0, 1.001]
+    uniq = sorted({round(float(s), 6) for s in scores})
+    if len(uniq) <= max_points:
+        sampled = uniq
+    else:
+        # Evenly spaced quantile sample over the unique values.
+        step = (len(uniq) - 1) / (max_points - 1)
+        sampled = [uniq[round(i * step)] for i in range(max_points)]
+    return sorted({0.0, 1.001, *sampled})
 
 
 async def _precompute_one(
@@ -365,12 +390,26 @@ async def run_eval_sweep(
         )
         precomputed.append(pq)
 
+    # Build per-router threshold lists. Empty input list = auto-mode: each
+    # router gets thresholds sampled from its own observed score distribution.
+    # Explicit input applies the same list to every router (legacy behavior).
+    auto_mode = not thresholds
+    thresholds_by_router: dict[str, list[float]] = {}
+    for router_name in router_names:
+        if router_name not in sweep_routers:
+            continue
+        if auto_mode:
+            scores = [pq.router_scores.get(router_name, 1.0) for pq in precomputed]
+            thresholds_by_router[router_name] = auto_thresholds_for_router(scores)
+        else:
+            thresholds_by_router[router_name] = sorted(set(thresholds))
+
     # In-memory threshold sweep: cheap.
     points: list[dict[str, Any]] = []
     for router_name in router_names:
         if router_name not in sweep_routers:
             continue
-        for t in thresholds:
+        for t in thresholds_by_router[router_name]:
             n_correct = 0
             n_escalated = 0
             total_cost = 0.0
@@ -387,7 +426,7 @@ async def run_eval_sweep(
             n = len(precomputed)
             points.append({
                 "router": router_name,
-                "threshold": round(t, 3),
+                "threshold": round(t, 4),
                 "accuracy": n_correct / n if n else 0.0,
                 "escalation_rate": n_escalated / n if n else 0.0,
                 "cost_usd": total_cost,
@@ -428,28 +467,48 @@ async def run_eval_sweep(
                 cheapest = min(beats, key=lambda i: points[i]["cost_usd"])
                 recommended = {**points[cheapest], "index": cheapest, "reason": "cheapest config that beats weak-only accuracy"}
 
+    # Union of every threshold actually swept (kept for back-compat with
+    # earlier reports that had a flat list).
+    union_thresholds = sorted({t for ts in thresholds_by_router.values() for t in ts})
+
+    per_question = [
+        {
+            "qid": pq.qid,
+            "weak_correct": pq.weak_correct,
+            "strong_correct": pq.strong_correct,
+            "weak_cost": pq.weak_cost,
+            "strong_cost": pq.strong_cost,
+            "router_scores": {k: float(v) for k, v in pq.router_scores.items()},
+        }
+        for pq in precomputed
+    ]
+
     report = EvalReport(
         dataset_id=dataset.id,
         n=len(precomputed),
         routers=router_names,
-        thresholds=thresholds,
+        thresholds=union_thresholds,
+        thresholds_by_router=thresholds_by_router,
         points=points,
         pareto_indices=pareto,
         recommended=recommended,
         weak_only=weak_only,
         strong_only=strong_only,
         judge_model=judge_model,
+        per_question=per_question,
     )
     dataset.last_report = {
         "n": report.n,
         "routers": report.routers,
         "thresholds": report.thresholds,
+        "thresholds_by_router": report.thresholds_by_router,
         "points": report.points,
         "pareto_indices": report.pareto_indices,
         "recommended": report.recommended,
         "weak_only": report.weak_only,
         "strong_only": report.strong_only,
         "judge_model": report.judge_model,
+        "per_question": report.per_question,
         "completed_at": report.completed_at,
     }
     dataset.status = "evaluated"

@@ -420,7 +420,9 @@ class DatasetGenerateRequest(BaseModel):
 
 class DatasetEvaluateRequest(BaseModel):
     routers: list[str] = Field(default_factory=lambda: ["self_reported", "semantic_entropy_embed"])
-    thresholds: list[float] = Field(default_factory=lambda: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+    # Empty list = auto-mode: thresholds are sampled from each router's own
+    # observed score distribution. An explicit list is honored as-is.
+    thresholds: list[float] = Field(default_factory=list)
 
 
 def _dataset_to_dict(ds: Any, *, with_rows: int | None = 0) -> dict[str, Any]:
