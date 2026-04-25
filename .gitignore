@@ -21,4 +21,7 @@ venv/
 .cache/
 hf_cache/
 
+# Pickled artifacts produced by med_routing.train.fit
+models/
+
 .DS_Store
