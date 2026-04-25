@@ -1,0 +1,103 @@
+{
+  "uid": "med-routing-history",
+  "title": "med-routing — Audit history (SQLite)",
+  "tags": ["med-routing", "history", "sqlite"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-30d", "to": "now"},
+  "timepicker": {},
+  "templating": {"list": []},
+  "annotations": {"list": []},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total decisions (all-time)",
+      "type": "stat",
+      "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+          "queryText": "SELECT COUNT(*) AS value FROM decisions",
+          "queryType": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": null}]}}
+      },
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value", "colorMode": "value"}
+    },
+    {
+      "id": 2,
+      "title": "Eval rows (all-time)",
+      "type": "stat",
+      "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+          "queryText": "SELECT COUNT(*) AS value FROM eval_rows",
+          "queryType": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}
+      },
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value", "colorMode": "value"}
+    },
+    {
+      "id": 3,
+      "title": "Decisions by router",
+      "type": "table",
+      "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+          "queryText": "SELECT router, COUNT(*) AS decisions, SUM(escalated) AS escalated, ROUND(100.0 * SUM(escalated) / COUNT(*), 1) AS escalation_pct, ROUND(SUM(cost_usd), 4) AS cost_usd, ROUND(SUM(counterfactual_usd) - SUM(cost_usd), 4) AS savings_vs_all_strong FROM decisions GROUP BY router ORDER BY decisions DESC",
+          "queryType": "table"
+        }
+      ],
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "options": {"showHeader": true}
+    },
+    {
+      "id": 4,
+      "title": "Recent decisions (50 most recent across all routers)",
+      "type": "table",
+      "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 12},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+          "queryText": "SELECT ts, router, ROUND(score, 3) AS score, ROUND(threshold, 2) AS threshold, escalated, final_model, latency_ms FROM decisions ORDER BY id DESC LIMIT 50",
+          "queryType": "table"
+        }
+      ],
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "options": {"showHeader": true}
+    },
+    {
+      "id": 5,
+      "title": "Eval accuracy by router (from labeled history)",
+      "type": "table",
+      "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+      "gridPos": {"x": 0, "y": 12, "w": 24, "h": 8},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "frser-sqlite-datasource", "uid": "sqlite-audit"},
+          "queryText": "SELECT router, COUNT(*) AS n, SUM(correct) AS correct, ROUND(100.0 * SUM(correct) / COUNT(*), 1) AS accuracy_pct, SUM(escalated) AS escalated, ROUND(100.0 * SUM(escalated) / COUNT(*), 1) AS escalation_pct FROM eval_rows GROUP BY router ORDER BY n DESC",
+          "queryType": "table"
+        }
+      ],
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "options": {"showHeader": true}
+    }
+  ]
+}
