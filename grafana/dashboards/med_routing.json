@@ -18,17 +18,24 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Request rate by router",
+      "title": "Cumulative requests by router",
+      "description": "Total requests per router as a step line. Replayed history shows up as the initial step at startup; live traffic appears as additional steps. Click 'Run batch' on the demo UI to watch the lines climb.",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum by (router) (rate(medr_requests_total[5m]))",
+          "expr": "sum by (router) (medr_requests_total)",
           "legendFormat": "{{router}}",
           "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineInterpolation": "stepAfter", "fillOpacity": 10 }
+        },
+        "overrides": []
+      }
     },
     {
       "id": 2,
