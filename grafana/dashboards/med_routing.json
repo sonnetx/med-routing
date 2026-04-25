@@ -147,66 +147,6 @@
       }
     },
     {
-      "id": 8,
-      "type": "barchart",
-      "title": "Cost per router (USD)",
-      "description": "Total dollars spent per router (replays + live traffic / eval pushes). Lower is better when accuracy is held constant.",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 9
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "sum by (router) (medr_actual_cost_usd_total)",
-          "refId": "A",
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "indexByName": {},
-            "renameByName": {}
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyUSD",
-          "decimals": 5,
-          "color": {
-            "mode": "palette-classic"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "vertical",
-        "showValue": "auto",
-        "stacking": "none",
-        "groupWidth": 0.7,
-        "barWidth": 0.9,
-        "xTickLabelRotation": -20,
-        "xField": "router",
-        "legend": {
-          "showLegend": false,
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      }
-    },
-    {
       "id": 6,
       "type": "heatmap",
       "title": "Latency distribution by tier",
@@ -857,10 +797,10 @@
       "type": "timeseries",
       "title": "Cumulative spend (USD) by model",
       "gridPos": {
+        "y": 46,
         "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 46
+        "w": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -885,10 +825,10 @@
       "type": "timeseries",
       "title": "Token rate by model and kind",
       "gridPos": {
+        "y": 46,
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 46
+        "x": 8,
+        "w": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -1066,6 +1006,127 @@
           }
         }
       ]
+    },
+    {
+      "id": 19,
+      "type": "barchart",
+      "title": "Median uncertainty score per router",
+      "description": "p50 of each router's score distribution. Pairs with the escalation rate gauge: higher median means more questions clear the threshold and get escalated. Routers whose scores cluster at 0 (e.g. semantic_entropy_embed when calibrated) won't escalate even at low thresholds.",
+      "gridPos": {
+        "y": 9,
+        "h": 8,
+        "x": 12,
+        "w": 12
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le, router) (medr_uncertainty_bucket))",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 3,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "stacking": "none",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "xTickLabelRotation": -20,
+        "xField": "router",
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "barchart",
+      "title": "Cost per router (USD)",
+      "description": "Total dollars spent per router (replays + live traffic / eval pushes). Lower is better when accuracy is held constant.",
+      "gridPos": {
+        "y": 46,
+        "h": 8,
+        "x": 16,
+        "w": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (router) (medr_actual_cost_usd_total)",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 5,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "stacking": "none",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "xTickLabelRotation": -20,
+        "xField": "router",
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
     }
   ],
   "refresh": "5s",
@@ -1086,6 +1147,6 @@
   "timezone": "",
   "title": "med-routing \u2014 Uncertainty Cascade",
   "uid": "med-routing",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }
