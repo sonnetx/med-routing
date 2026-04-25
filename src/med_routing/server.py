@@ -18,6 +18,7 @@ from .cache import CompletionCache
 from .cascade import CascadeController
 from .config import get_settings
 from .eval.aggregator import EvalAggregator
+from .fhir import decision_to_audit_event, to_bundle
 from .llm.openai_client import OpenAIClient
 from .metrics import ACCURACY, REGISTRY
 from .routers.registry import KNOWN_ROUTERS, build_routers
@@ -146,6 +147,42 @@ async def query_decisions(
             headers={"Content-Disposition": "attachment; filename=decisions.csv"},
         )
     return rows
+
+
+@app.get("/v1/audit/decisions.fhir")
+async def query_decisions_fhir(
+    limit: int = 100,
+    since: str | None = None,
+    router: str | None = None,
+    cross_border_only: bool = False,
+    format: str = "ndjson",
+):
+    """Cascade decisions as HL7 FHIR R4 AuditEvent resources.
+
+    Two output shapes:
+      - format=ndjson (default): one AuditEvent per line, FHIR Bulk Data style.
+      - format=bundle: a single FHIR Bundle (type=collection) wrapping all events.
+    """
+    rows = app.state.store.query_decisions(
+        limit=max(1, min(limit, 10_000)),
+        since=since, router=router, cross_border_only=cross_border_only,
+    )
+    events = [decision_to_audit_event(r) for r in rows]
+
+    if format == "bundle":
+        import json as _json
+        return Response(
+            content=_json.dumps(to_bundle(events), default=str),
+            media_type="application/fhir+json",
+        )
+
+    import json as _json
+    body = "\n".join(_json.dumps(e, default=str) for e in events) + ("\n" if events else "")
+    return Response(
+        content=body,
+        media_type="application/fhir+ndjson",
+        headers={"Content-Disposition": "attachment; filename=audit-events.ndjson"},
+    )
 
 
 @app.get("/v1/audit/eval")
