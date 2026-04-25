@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     threshold_semantic_entropy: float = Field(default=0.50, alias="THRESHOLD_SEMANTIC_ENTROPY")
     threshold_self_consistency: float = Field(default=0.40, alias="THRESHOLD_SELF_CONSISTENCY")
     threshold_routellm: float = Field(default=0.50, alias="THRESHOLD_ROUTELLM")
+    threshold_learned: float = Field(default=0.50, alias="THRESHOLD_LEARNED")
 
     sample_n: int = Field(default=5, alias="SAMPLE_N")
     sample_temperature: float = Field(default=0.7, alias="SAMPLE_TEMPERATURE")
@@ -38,6 +39,11 @@ class Settings(BaseSettings):
         alias="ROUTELLM_WEAK_MODEL",
     )
 
+    enable_learned: bool = Field(default=False, alias="ENABLE_LEARNED")
+    learned_router_path: str = Field(
+        default="models/learned_router.pkl", alias="LEARNED_ROUTER_PATH"
+    )
+
     cache_size: int = Field(default=2048, alias="CACHE_SIZE")
 
     home_region: str = Field(default="US", alias="HOME_REGION")
@@ -54,6 +60,7 @@ class Settings(BaseSettings):
             "semantic_entropy": self.threshold_semantic_entropy,
             "self_consistency": self.threshold_self_consistency,
             "routellm": self.threshold_routellm,
+            "learned": self.threshold_learned,
         }.get(router_name, 0.5)
 
 

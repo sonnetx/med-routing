@@ -40,6 +40,23 @@ def build_routers(client: OpenAIClient) -> dict[str, UncertaintyRouter]:
             strong_model=s.routellm_strong_model,
             weak_model=s.routellm_weak_model,
         )
+    if s.enable_learned:
+        # Composite router that runs the four base signals and feeds them to a
+        # fitted sklearn pipeline. Pickle is loaded from disk; if it's missing
+        # or fails to load we log+skip rather than crashing the app.
+        try:
+            from .learned import LearnedRouter
+
+            routers[LearnedRouter.name] = LearnedRouter(
+                artifact_path=s.learned_router_path,
+                sub_routers=dict(routers),
+            )
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "learned router not registered: %s", exc,
+            )
     return routers
 
 
@@ -49,4 +66,5 @@ KNOWN_ROUTERS = (
     "predictive_entropy",
     "semantic_entropy",
     "routellm",
+    "learned",
 )
