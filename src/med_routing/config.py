@@ -19,12 +19,24 @@ class Settings(BaseSettings):
     threshold_predictive_entropy: float = Field(default=0.40, alias="THRESHOLD_PREDICTIVE_ENTROPY")
     threshold_semantic_entropy: float = Field(default=0.50, alias="THRESHOLD_SEMANTIC_ENTROPY")
     threshold_self_consistency: float = Field(default=0.40, alias="THRESHOLD_SELF_CONSISTENCY")
+    threshold_routellm: float = Field(default=0.50, alias="THRESHOLD_ROUTELLM")
 
     sample_n: int = Field(default=5, alias="SAMPLE_N")
     sample_temperature: float = Field(default=0.7, alias="SAMPLE_TEMPERATURE")
 
-    nli_model: str = Field(default="microsoft/deberta-v3-large-mnli", alias="NLI_MODEL")
+    nli_model: str = Field(
+        default="cross-encoder/nli-deberta-v3-base",
+        alias="NLI_MODEL",
+    )
     enable_nli: bool = Field(default=False, alias="ENABLE_NLI")
+
+    enable_routellm: bool = Field(default=False, alias="ENABLE_ROUTELLM")
+    routellm_kind: str = Field(default="mf", alias="ROUTELLM_KIND")
+    routellm_strong_model: str = Field(default="gpt-4-1106-preview", alias="ROUTELLM_STRONG_MODEL")
+    routellm_weak_model: str = Field(
+        default="anyscale/mistralai/Mixtral-8x7B-Instruct-v0.1",
+        alias="ROUTELLM_WEAK_MODEL",
+    )
 
     cache_size: int = Field(default=2048, alias="CACHE_SIZE")
 
@@ -41,6 +53,7 @@ class Settings(BaseSettings):
             "predictive_entropy": self.threshold_predictive_entropy,
             "semantic_entropy": self.threshold_semantic_entropy,
             "self_consistency": self.threshold_self_consistency,
+            "routellm": self.threshold_routellm,
         }.get(router_name, 0.5)
 
 

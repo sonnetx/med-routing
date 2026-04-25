@@ -371,6 +371,14 @@ async function loadRandom() {
       setFormat("free_form");
       $("reference").value = it.reference_answer || "";
       $("gold").value = "";
+      // self_consistency / predictive_entropy degenerate on paraphrased answers
+      // (every sample is a unique string). Default to semantic_entropy when
+      // available so the cascade has a chance of keeping any free-form weak.
+      const routerSel = document.getElementById("router");
+      const hasSE = Array.from(routerSel.options).some(o => o.value === "semantic_entropy");
+      if (hasSE && (routerSel.value === "self_consistency" || routerSel.value === "predictive_entropy")) {
+        routerSel.value = "semantic_entropy";
+      }
     } else {
       setFormat("mcq");
       $("opa").value = it.options[0];

@@ -23,8 +23,14 @@ class DebertaNLIScorer:
         self._tokenizer = AutoTokenizer.from_pretrained(model_name)
         self._model = AutoModelForSequenceClassification.from_pretrained(model_name)
         self._model.eval()
-        # MNLI label order: 0=contradiction, 1=neutral, 2=entailment for DeBERTa-v3-MNLI.
-        self._entail_idx = 2
+        # Resolve the entailment index from id2label so we work with any MNLI
+        # checkpoint (microsoft order: 0=contradiction, 1=neutral, 2=entailment;
+        # MoritzLaurer order is the same; cross-encoder/nli-* may differ).
+        id2label = getattr(self._model.config, "id2label", {}) or {}
+        self._entail_idx = next(
+            (int(i) for i, label in id2label.items() if "entail" in str(label).lower()),
+            2,
+        )
 
     def entails(self, premise: str, hypothesis: str) -> bool:
         torch = self._torch

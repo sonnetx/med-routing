@@ -10,6 +10,7 @@ A small model answers first; if it's uncertain, the request is escalated to a st
 | `predictive_entropy` | Token-logprob entropy on the answer letter | $0 |
 | `self_consistency` | Sample N=5; `1 - modal_count/N` | 5× weak |
 | `semantic_entropy` | Sample N=5; bidirectional NLI clustering (DeBERTa-v3-MNLI); entropy over clusters | 5× weak + NLI |
+| `routellm` (baseline) | Pre-call learned classifier on the prompt; score = strong-wins probability | RouteLLM forward pass + embedding |
 
 Each request returns a normal OpenAI-compatible response plus `X-Med-Router`, `X-Uncertainty`, `X-Escalated`, `X-Model-Used` headers and a `med_routing` block in the JSON body.
 
@@ -57,6 +58,7 @@ Set per-request via the `router` field or `X-Router` header. Available names:
 - `predictive_entropy`
 - `self_consistency`
 - `semantic_entropy` (only when `ENABLE_NLI=true` and the `nli` extra is installed)
+- `routellm` (only when `ENABLE_ROUTELLM=true` and the `routellm` extra is installed) — used as the baseline to beat. Note: in-cascade it still pays the weak-call cost, since the cascade always runs the weak model before scoring; for a true cost-fair RouteLLM baseline, run it as a pre-call short-circuit in eval.
 
 ## Configuration
 
@@ -74,5 +76,5 @@ Covers each router, the cache, and the cascade end-to-end with a stubbed OpenAI 
 
 - Kuhn, Gal, Farquhar. *Semantic Uncertainty: Linguistic Invariances for Uncertainty Estimation in Natural Language Generation*. ICLR 2023. [arXiv:2302.09664](https://arxiv.org/abs/2302.09664)
 - Chuang et al. *Confident or Seek Stronger: Exploring Uncertainty-Based On-device LLM Routing From Benchmarking to Generalization*. 2025. [arXiv:2502.04428](https://arxiv.org/abs/2502.04428)
-- [RouteLLM](https://github.com/lm-sys/RouteLLM) — used as a baseline-router source for comparison.
+- [RouteLLM](https://github.com/lm-sys/RouteLLM) — wired in as the `routellm` baseline router (pretrained `mf` matrix-factorization classifier). The current four uncertainty routers should beat it on MedMCQA since RouteLLM's pretrained checkpoints are trained on general Chatbot Arena preferences, not medical content.
 - [MedMCQA](https://huggingface.co/datasets/openlifescienceai/medmcqa) — Apache 2.0 medical MCQ benchmark.
