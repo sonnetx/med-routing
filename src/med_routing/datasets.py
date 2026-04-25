@@ -27,6 +27,7 @@ from .cache import CompletionCache
 from .config import cost_usd, get_settings
 from .eval.scoring import score_freeform_with_judge
 from .llm.openai_client import OpenAIClient
+from .metrics import CALIBRATION_BIN_CORRECT, CALIBRATION_BIN_TOTAL
 from .routers.base import UncertaintyRouter
 
 DatasetStatus = Literal["uploaded", "generating", "ready", "evaluating", "evaluated"]
@@ -515,6 +516,7 @@ async def run_eval_sweep(
         points=points,
         pareto_indices=pareto,
         recommended=recommended,
+        tier_baselines=tier_baselines,
         weak_only=weak_only,
         strong_only=strong_only,
         judge_model=judge_model,
@@ -527,6 +529,7 @@ async def run_eval_sweep(
         "points": report.points,
         "pareto_indices": report.pareto_indices,
         "recommended": report.recommended,
+        "tier_baselines": report.tier_baselines,
         "weak_only": report.weak_only,
         "strong_only": report.strong_only,
         "judge_model": report.judge_model,
@@ -585,20 +588,54 @@ def _push_eval_to_aggregator(
             cands.sort(key=lambda p: (-p["accuracy"], p["cost_usd"]))
             tau = cands[0]["threshold"]
 
+        # First pass: feed observations to the aggregator (ECE, accuracy gauges,
+        # fixed-bin calibration counters). Also collect (score, correct) pairs
+        # for the quartile-bin pass.
+        observations: list[tuple[float, bool]] = []
         for pq in precomputed:
-            score = float(pq.router_scores.get(router, 1.0))
-            escalated = score >= tau
-            correct = pq.strong_correct if escalated else pq.weak_correct
+            scores = pq.router_scores.get(router) or [1.0] * len(pq.tiers)
+            score0 = float(scores[0])
+            escalated = score0 >= tau
+            committed_at = len(pq.tiers) - 1
+            for ti in range(len(pq.tiers)):
+                if scores[ti] < tau or ti == len(pq.tiers) - 1:
+                    committed_at = ti
+                    break
+            correct = bool(pq.tiers[committed_at].correct)
             try:
                 aggregator.observe(
                     router=router,
-                    score=score,
+                    score=score0,
                     escalated=escalated,
-                    correct=bool(correct),
+                    correct=correct,
                     persist=False,
                 )
             except Exception:
                 pass
+            observations.append((score0, correct))
+
+        # Second pass: per-router quartile bins so the reliability diagram has
+        # ~equal counts per bucket regardless of the score distribution shape.
+        # Fixed-width bins collapse to one bar when scores cluster (e.g.
+        # self_reported's `1 - confidence` lives in [0, 0.1]).
+        if observations:
+            sorted_scores = sorted(s for s, _ in observations)
+            n = len(sorted_scores)
+            q25 = sorted_scores[n // 4] if n >= 4 else sorted_scores[0]
+            q50 = sorted_scores[n // 2] if n >= 2 else sorted_scores[0]
+            q75 = sorted_scores[(3 * n) // 4] if n >= 4 else sorted_scores[-1]
+            for score, correct in observations:
+                if score <= q25:
+                    qbin = "Q1"
+                elif score <= q50:
+                    qbin = "Q2"
+                elif score <= q75:
+                    qbin = "Q3"
+                else:
+                    qbin = "Q4"
+                CALIBRATION_BIN_TOTAL.labels(router=router, bin=qbin).inc()
+                if correct:
+                    CALIBRATION_BIN_CORRECT.labels(router=router, bin=qbin).inc()
 
 
 # ---------- Disk persistence ----------

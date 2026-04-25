@@ -212,7 +212,7 @@
       "id": 9,
       "type": "barchart",
       "title": "Reliability diagram (weak-model accuracy by uncertainty bin)",
-      "description": "For each uncertainty bin, fraction of weak answers that were correct. Well-calibrated = high accuracy in low-uncertainty bins, low accuracy in high-uncertainty bins.",
+      "description": "Per-router quartile bins (Q1=lowest 25% of scores, Q4=highest). For each bin, fraction of weak answers that were correct. Calibrated routers show falling accuracy from Q1 to Q4. Quartile binning ensures every router has 4 bars regardless of its score distribution shape.",
       "gridPos": {
         "h": 7,
         "w": 16,
@@ -225,7 +225,7 @@
       },
       "targets": [
         {
-          "expr": "medr_calibration_bin_correct_total / clamp_min(medr_calibration_bin_total, 1)",
+          "expr": "medr_calibration_bin_correct_total{bin=~\"Q[1-4]\"} / clamp_min(medr_calibration_bin_total{bin=~\"Q[1-4]\"}, 1)",
           "refId": "A",
           "instant": true,
           "format": "table"
@@ -800,6 +800,6 @@
   "timezone": "",
   "title": "med-routing \u2014 Eval Dashboard",
   "uid": "med-routing-eval",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }

@@ -71,11 +71,18 @@ class OpenAIClient:
         n: int = 1,
         seed: int | None = None,
     ) -> list[Completion]:
+        # GPT-5 / o1 / o3 families renamed max_tokens -> max_completion_tokens.
+        # Translate at this layer so callers stay model-agnostic.
+        token_param = (
+            "max_completion_tokens"
+            if model.startswith(("gpt-5", "o1", "o3", "o4"))
+            else "max_tokens"
+        )
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens,
+            token_param: max_tokens,
             "n": n,
         }
         if logprobs:

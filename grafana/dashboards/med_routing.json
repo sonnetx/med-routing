@@ -453,7 +453,7 @@
       },
       "targets": [
         {
-          "expr": "medr_calibration_bin_correct_total / clamp_min(medr_calibration_bin_total, 1)",
+          "expr": "medr_calibration_bin_correct_total{bin!~\"Q[1-4]\"} / clamp_min(medr_calibration_bin_total{bin!~\"Q[1-4]\"}, 1)",
           "refId": "A",
           "instant": true,
           "format": "table"
@@ -1147,6 +1147,6 @@
   "timezone": "",
   "title": "med-routing \u2014 Uncertainty Cascade",
   "uid": "med-routing",
-  "version": 4,
+  "version": 5,
   "weekStart": ""
 }
