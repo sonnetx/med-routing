@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>med-routing — interactive cascade demo</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #c9d1d9;
+    --muted: #8b949e; --accent: #58a6ff; --weak: #3fb950; --strong: #f85149;
+    --warn: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex;
+           justify-content: space-between; align-items: baseline; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .links a { color: var(--muted); text-decoration: none; margin-left: 14px; }
+  header .links a:hover { color: var(--accent); }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; display: grid;
+         grid-template-columns: 1fr 1fr; gap: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+           padding: 16px; }
+  .panel h2 { font-size: 13px; font-weight: 600; text-transform: uppercase;
+              letter-spacing: 0.05em; color: var(--muted); margin: 0 0 12px 0; }
+  textarea, input, select { width: 100%; background: #0d1117; color: var(--text);
+              border: 1px solid var(--line); border-radius: 4px; padding: 8px;
+              font: inherit; }
+  textarea { resize: vertical; min-height: 70px; }
+  label { display: block; margin: 10px 0 4px 0; font-size: 12px; color: var(--muted); }
+  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .row { display: flex; gap: 10px; align-items: end; }
+  .row > * { flex: 1; }
+  button { background: var(--accent); color: #0d1117; border: 0; border-radius: 4px;
+           padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent);
+                     border: 1px solid var(--line); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+           font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .badge.weak { background: rgba(63,185,80,0.15); color: var(--weak); }
+  .badge.strong { background: rgba(248,81,73,0.18); color: var(--strong); }
+  .answer { font-size: 36px; font-weight: 700; }
+  .answer.correct { color: var(--weak); }
+  .answer.wrong { color: var(--strong); }
+  .meta { display: grid; grid-template-columns: max-content 1fr; row-gap: 6px;
+          column-gap: 10px; font-size: 13px; }
+  .meta .k { color: var(--muted); }
+  .bar { height: 8px; background: #0d1117; border-radius: 4px; overflow: hidden;
+         margin: 4px 0 10px 0; border: 1px solid var(--line); }
+  .bar > div { height: 100%; background: linear-gradient(90deg, var(--weak), var(--warn), var(--strong)); }
+  .threshold { position: relative; height: 0; }
+  .threshold::after { content: ""; position: absolute; top: -10px; width: 1px; height: 12px;
+                      background: var(--accent); }
+  pre { background: #0d1117; border: 1px solid var(--line); border-radius: 4px;
+        padding: 10px; font-size: 12px; overflow-x: auto; max-height: 240px; }
+  .extras-grid { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; }
+  .extras-grid .k { color: var(--muted); }
+  .pill-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .pill { padding: 2px 6px; background: #21262d; border-radius: 3px; font-size: 12px;
+          font-family: ui-monospace, Consolas, monospace; }
+  .pill.match { background: rgba(63,185,80,0.2); color: var(--weak); }
+  .gold { color: var(--weak); font-weight: 600; }
+  .err { color: var(--strong); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>med-routing — interactive cascade demo</h1>
+  <div class="links">
+    <a href="/docs" target="_blank">API docs</a>
+    <a href="http://localhost:3000" target="_blank">Grafana</a>
+    <a href="http://localhost:9090" target="_blank">Prometheus</a>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>question</h2>
+    <label for="q">Question</label>
+    <textarea id="q" placeholder="Type or load a random MedMCQA question..."></textarea>
+    <div class="options">
+      <div><label>A</label><input id="opa" /></div>
+      <div><label>B</label><input id="opb" /></div>
+      <div><label>C</label><input id="opc" /></div>
+      <div><label>D</label><input id="opd" /></div>
+    </div>
+    <label>Gold answer (A–D, optional)</label>
+    <input id="gold" maxlength="1" />
+
+    <label style="margin-top:14px">Router</label>
+    <select id="router">
+      <option value="self_consistency">self_consistency</option>
+      <option value="self_reported">self_reported</option>
+      <option value="predictive_entropy">predictive_entropy</option>
+      <option value="semantic_entropy">semantic_entropy</option>
+    </select>
+
+    <div class="row" style="margin-top:14px">
+      <button id="run">Send to cascade</button>
+      <button id="rand" class="secondary">Load random MedMCQA</button>
+    </div>
+    <div id="err" class="err"></div>
+  </section>
+
+  <section class="panel" id="result">
+    <h2>routing decision</h2>
+    <div id="placeholder" style="color:var(--muted)">Submit a question to see the cascade decision.</div>
+    <div id="answer-block" style="display:none">
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px">
+        <div class="answer" id="answer">?</div>
+        <div>
+          <span id="badge" class="badge weak">WEAK</span>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px"
+               id="model-used"></div>
+        </div>
+        <div id="correctness" style="margin-left:auto; font-size:13px; color:var(--muted);"></div>
+      </div>
+
+      <div class="meta">
+        <div class="k">Router</div><div id="router-out"></div>
+        <div class="k">Uncertainty score</div>
+        <div>
+          <div id="score-text"></div>
+          <div class="bar"><div id="score-bar" style="width:0%"></div></div>
+        </div>
+        <div class="k">Threshold</div><div id="threshold-text"></div>
+        <div class="k">Latency</div><div id="latency"></div>
+      </div>
+
+      <h2 style="margin-top:18px">router internals</h2>
+      <div id="extras"></div>
+
+      <h2 style="margin-top:18px">raw response</h2>
+      <pre id="raw"></pre>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function buildMessages() {
+  const q = $("q").value.trim();
+  const opts = ["opa","opb","opc","opd"].map(k => $(k).value.trim());
+  if (!q || opts.some(o => !o)) {
+    return null;
+  }
+  const prompt = `You are a careful medical expert answering a multiple-choice question.\n\n` +
+    `Question: ${q}\n` +
+    `A) ${opts[0]}\nB) ${opts[1]}\nC) ${opts[2]}\nD) ${opts[3]}\n\n` +
+    `Reply with a single letter (A, B, C, or D) and nothing else.`;
+  return [{ role: "user", content: prompt }];
+}
+
+function renderExtras(router, extras) {
+  if (!extras || Object.keys(extras).length === 0) return "<em>none</em>";
+  if (router === "self_consistency" && extras.letters) {
+    const modal = extras.modal;
+    return `
+      <div class="extras-grid">
+        <div class="k">samples (n=${extras.n})</div>
+        <div class="pill-row">
+          ${extras.letters.map(l => `<span class="pill ${l===modal?'match':''}">${l}</span>`).join("")}
+        </div>
+        <div class="k">modal</div><div>${modal} (${extras.modal_count} of ${extras.n})</div>
+      </div>`;
+  }
+  if (router === "self_reported") {
+    return `
+      <div class="extras-grid">
+        <div class="k">model said</div><div>${extras.confidence ?? "?"}/100</div>
+        <div class="k">raw</div><div><code>${(extras.raw||"").replace(/[<>]/g,'')}</code></div>
+      </div>`;
+  }
+  if (router === "predictive_entropy") {
+    return `
+      <div class="extras-grid">
+        <div class="k">raw entropy (nats)</div><div>${(extras.raw_entropy_nats??0).toFixed(4)}</div>
+        <div class="k">normalizer log(k)</div><div>${(extras.normalizer_log_k??0).toFixed(4)}</div>
+        <div class="k">letter token used</div><div>${extras.letter_token_used ? "yes" : "fell back to mean"}</div>
+      </div>`;
+  }
+  if (router === "semantic_entropy") {
+    return `
+      <div class="extras-grid">
+        <div class="k">samples</div><div>n=${extras.n}</div>
+        <div class="k">cluster sizes</div><div>${(extras.clusters||[]).join(", ")}</div>
+        <div class="k">raw entropy (nats)</div><div>${(extras.raw_entropy_nats??0).toFixed(4)}</div>
+      </div>`;
+  }
+  return `<pre>${JSON.stringify(extras,null,2)}</pre>`;
+}
+
+async function run() {
+  $("err").textContent = "";
+  const messages = buildMessages();
+  if (!messages) {
+    $("err").textContent = "Fill in a question and all four options.";
+    return;
+  }
+  const router = $("router").value;
+  const btn = $("run"); btn.disabled = true; btn.textContent = "Routing…";
+  const t0 = performance.now();
+  try {
+    const r = await fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, router }),
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(`${r.status}: ${txt}`);
+    }
+    const body = await r.json();
+    render(body, router, performance.now() - t0);
+
+    const goldLetter = ($("gold").value || "").toUpperCase();
+    const predicted = (body.choices[0].message.content.match(/[A-D]/i) || [""])[0].toUpperCase();
+    if (goldLetter && /^[A-D]$/.test(goldLetter)) {
+      const correct = predicted === goldLetter;
+      $("correctness").innerHTML = correct
+        ? `<span class="gold">✓ correct (gold ${goldLetter})</span>`
+        : `<span style="color:var(--strong)">✗ wrong, gold was ${goldLetter}</span>`;
+      // Push to /v1/eval/observe so Grafana sees it.
+      fetch("/v1/eval/observe", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          router, score: body.med_routing.score,
+          escalated: body.med_routing.escalated, correct,
+          subject: window.__lastSubject || null,
+        }),
+      }).catch(()=>{});
+    } else {
+      $("correctness").textContent = "";
+    }
+  } catch (e) {
+    $("err").textContent = String(e);
+  } finally {
+    btn.disabled = false; btn.textContent = "Send to cascade";
+  }
+}
+
+function render(body, router, ms) {
+  $("placeholder").style.display = "none";
+  $("answer-block").style.display = "block";
+  const meta = body.med_routing;
+  const text = body.choices[0].message.content;
+  const letter = (text.match(/[A-D]/i) || [""])[0].toUpperCase();
+
+  $("answer").textContent = letter || "?";
+  $("answer").className = "answer";
+
+  const badge = $("badge");
+  badge.textContent = meta.escalated ? "ESCALATED → STRONG" : "KEPT WEAK";
+  badge.className = "badge " + (meta.escalated ? "strong" : "weak");
+
+  $("model-used").textContent = body.model;
+  $("router-out").textContent = router;
+  $("score-text").textContent =
+    `${meta.score.toFixed(3)} (${(meta.score*100).toFixed(1)}% uncertain)`;
+  $("score-bar").style.width = `${(meta.score*100).toFixed(1)}%`;
+  $("threshold-text").textContent =
+    `${meta.threshold.toFixed(2)} — ${meta.score >= meta.threshold ? "exceeded → escalate" : "below → keep weak"}`;
+  $("latency").textContent = `${ms.toFixed(0)} ms`;
+
+  $("extras").innerHTML = renderExtras(router, meta.extras || {});
+  $("raw").textContent = JSON.stringify(body, null, 2);
+}
+
+async function loadRandom() {
+  $("err").textContent = "";
+  try {
+    const r = await fetch("/v1/eval/sample");
+    if (!r.ok) throw new Error(`sample endpoint returned ${r.status}`);
+    const it = await r.json();
+    $("q").value = it.question;
+    $("opa").value = it.options[0];
+    $("opb").value = it.options[1];
+    $("opc").value = it.options[2];
+    $("opd").value = it.options[3];
+    $("gold").value = it.answer;
+    window.__lastSubject = it.subject;
+  } catch (e) {
+    $("err").textContent = String(e);
+  }
+}
+
+$("run").addEventListener("click", run);
+$("rand").addEventListener("click", loadRandom);
+</script>
+</body>
+</html>

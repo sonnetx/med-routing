@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import random
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
@@ -51,15 +54,46 @@ async def lifespan(app: FastAPI):
     app.state.controller = CascadeController(client=client, routers=routers, cache=cache)
     app.state.routers = routers
     app.state.aggregator = EvalAggregator()
+    app.state.medmcqa_pool = None  # lazily filled on first /v1/eval/sample
     yield
 
 
 app = FastAPI(title="med-routing", version="0.1.0", lifespan=lifespan)
 
+_STATIC_DIR = Path(__file__).parent / "static"
+if _STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def index() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "index.html")
+
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
     return {"status": "ok", "routers": sorted(app.state.routers.keys())}
+
+
+@app.get("/v1/eval/sample")
+async def sample_question() -> dict[str, Any]:
+    """Return a random MedMCQA validation item for the demo UI."""
+    pool = app.state.medmcqa_pool
+    if pool is None:
+        from .eval.medmcqa import load_medmcqa
+
+        pool = list(load_medmcqa(split="validation", limit=200))
+        app.state.medmcqa_pool = pool
+    if not pool:
+        raise HTTPException(503, "MedMCQA pool empty")
+    item = random.choice(pool)
+    return {
+        "qid": item.qid,
+        "question": item.question,
+        "options": list(item.options),
+        "answer": item.answer,
+        "subject": item.subject,
+    }
 
 
 @app.get("/metrics")
