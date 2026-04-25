@@ -184,6 +184,128 @@
       "transformations": [
         { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "job": true, "instance": true } } }
       ]
+    },
+    {
+      "id": 9,
+      "type": "barchart",
+      "title": "Reliability diagram (weak-model accuracy by uncertainty bin)",
+      "description": "For each uncertainty bin, fraction of weak answers that were correct. A well-calibrated router has high accuracy in low-uncertainty bins, low accuracy in high-uncertainty bins.",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "medr_calibration_bin_correct / clamp_min(medr_calibration_bin_total, 1)",
+          "legendFormat": "{{router}} / {{bin}}",
+          "refId": "A",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "xTickLabelRotation": -45,
+        "showValue": "auto",
+        "stacking": "none",
+        "groupWidth": 0.7,
+        "barWidth": 0.9
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Expected calibration error",
+      "description": "Lower is better. ECE = sum_b (n_b/N) * |(1 - bin_midpoint) - bin_accuracy|.",
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "medr_ece",
+          "legendFormat": "{{router}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 3,
+          "min": 0,
+          "max": 0.5,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 0.2 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 11,
+      "type": "bargauge",
+      "title": "Selective accuracy: kept-weak vs escalated",
+      "description": "Did the router escalate the right questions? If kept-weak accuracy > escalated accuracy, the router is sending easier questions to the strong model — bad. We want kept-weak HIGH (router was right to keep them) and escalation gating that the strong model lifts.",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 41 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "medr_kept_weak_accuracy",
+          "legendFormat": "kept-weak / {{router}}",
+          "refId": "A",
+          "instant": true
+        },
+        {
+          "expr": "medr_escalated_accuracy",
+          "legendFormat": "escalated / {{router}}",
+          "refId": "B",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
+        "overrides": []
+      },
+      "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true }
+    },
+    {
+      "id": 12,
+      "type": "heatmap",
+      "title": "Accuracy by MedMCQA subject",
+      "description": "Per-subject accuracy. Watch for collapse on high-stakes subjects (Surgery, Pediatrics).",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 41 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "medr_accuracy_by_subject",
+          "legendFormat": "{{router}} / {{subject}}",
+          "refId": "A",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
+        "overrides": []
+      },
+      "options": {
+        "calculate": false,
+        "color": { "scheme": "RdYlGn", "mode": "scheme" },
+        "yAxis": { "axisPlacement": "left" },
+        "legend": { "show": true }
+      }
     }
   ],
   "refresh": "5s",

@@ -62,6 +62,68 @@ ESCALATION_RATE = Gauge(
     registry=REGISTRY,
 )
 
+# Calibration: bin every observation by uncertainty score and track correctness.
+# Reliability per bin = bin_correct / bin_total. A good router has high weak-accuracy
+# in low-uncertainty bins and low weak-accuracy in high-uncertainty bins.
+CALIBRATION_BINS = (
+    "0.0-0.1", "0.1-0.2", "0.2-0.3", "0.3-0.4", "0.4-0.5",
+    "0.5-0.6", "0.6-0.7", "0.7-0.8", "0.8-0.9", "0.9-1.0",
+)
+
+CALIBRATION_BIN_TOTAL = Counter(
+    "medr_calibration_bin_total",
+    "Observations in each uncertainty bin (for reliability diagram).",
+    ["router", "bin"],
+    registry=REGISTRY,
+)
+
+CALIBRATION_BIN_CORRECT = Counter(
+    "medr_calibration_bin_correct",
+    "Correct observations in each uncertainty bin.",
+    ["router", "bin"],
+    registry=REGISTRY,
+)
+
+ECE = Gauge(
+    "medr_ece",
+    "Expected calibration error: weighted |(1 - bin_midpoint_uncertainty) - bin_accuracy|.",
+    ["router"],
+    registry=REGISTRY,
+)
+
+KEPT_WEAK_ACCURACY = Gauge(
+    "medr_kept_weak_accuracy",
+    "Accuracy on questions where the router did NOT escalate (weak model only).",
+    ["router"],
+    registry=REGISTRY,
+)
+
+ESCALATED_ACCURACY = Gauge(
+    "medr_escalated_accuracy",
+    "Accuracy on questions where the router escalated to the strong model.",
+    ["router"],
+    registry=REGISTRY,
+)
+
+ACCURACY_BY_SUBJECT = Gauge(
+    "medr_accuracy_by_subject",
+    "Rolling accuracy partitioned by MedMCQA subject.",
+    ["router", "subject"],
+    registry=REGISTRY,
+)
+
+
+def score_bin(score: float) -> str:
+    """Map a score in [0,1] to one of CALIBRATION_BINS. Right-edge inclusive on 1.0."""
+    s = max(0.0, min(1.0, float(score)))
+    idx = min(int(s * 10), 9)
+    return CALIBRATION_BINS[idx]
+
+
+def bin_midpoint(bin_label: str) -> float:
+    lo, hi = bin_label.split("-")
+    return (float(lo) + float(hi)) / 2.0
+
 
 def record_usage(model: str, prompt_tokens: int, completion_tokens: int, cost: float) -> None:
     TOKENS_TOTAL.labels(model=model, kind="prompt").inc(prompt_tokens)

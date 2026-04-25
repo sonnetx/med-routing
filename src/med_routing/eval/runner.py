@@ -61,15 +61,22 @@ async def _run(args: argparse.Namespace) -> int:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 f.flush()
 
+                try:
+                    await client.post(
+                        f"{args.base_url}/v1/eval/observe",
+                        json={
+                            "router": args.router,
+                            "score": float(meta.get("score") or 0.0),
+                            "escalated": bool(meta.get("escalated")),
+                            "correct": ok,
+                            "subject": item.subject or None,
+                        },
+                    )
+                except Exception:
+                    pass
+
                 if total % args.push_every == 0:
                     acc = correct / total
-                    try:
-                        await client.post(
-                            f"{args.base_url}/v1/eval/accuracy",
-                            json={"router": args.router, "accuracy": acc},
-                        )
-                    except Exception:
-                        pass
                     print(
                         f"[{total:>4}/{len(items)}] acc={acc:.3f} "
                         f"esc={escalations / total:.3f} router={args.router}"
@@ -77,14 +84,6 @@ async def _run(args: argparse.Namespace) -> int:
 
     if total:
         acc = correct / total
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            try:
-                await client.post(
-                    f"{args.base_url}/v1/eval/accuracy",
-                    json={"router": args.router, "accuracy": acc},
-                )
-            except Exception:
-                pass
         print(f"\nDone. router={args.router} n={total} acc={acc:.4f} escalation_rate={escalations / total:.4f}")
         print(f"Per-question log: {out_path}")
     return 0

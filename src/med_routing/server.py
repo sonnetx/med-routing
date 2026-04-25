@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from .cache import CompletionCache
 from .cascade import CascadeController
 from .config import get_settings
+from .eval.aggregator import EvalAggregator
 from .llm.openai_client import OpenAIClient
 from .metrics import ACCURACY, REGISTRY
 from .routers.registry import KNOWN_ROUTERS, build_routers
@@ -34,6 +35,14 @@ class AccuracyUpdate(BaseModel):
     accuracy: float
 
 
+class Observation(BaseModel):
+    router: str
+    score: float
+    escalated: bool
+    correct: bool
+    subject: str | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     client = OpenAIClient()
@@ -41,6 +50,7 @@ async def lifespan(app: FastAPI):
     cache = CompletionCache()
     app.state.controller = CascadeController(client=client, routers=routers, cache=cache)
     app.state.routers = routers
+    app.state.aggregator = EvalAggregator()
     yield
 
 
@@ -62,6 +72,20 @@ async def push_accuracy(payload: AccuracyUpdate) -> dict[str, Any]:
     """Eval runner pushes rolling accuracy here so Grafana shows it live."""
     ACCURACY.labels(router=payload.router).set(payload.accuracy)
     return {"ok": True}
+
+
+@app.post("/v1/eval/observe")
+async def push_observation(payload: Observation, request: Request) -> dict[str, Any]:
+    """Per-question evaluation observation. Updates calibration counters,
+    selective accuracy gauges, per-subject accuracy, ECE."""
+    summary = app.state.aggregator.observe(
+        router=payload.router,
+        score=payload.score,
+        escalated=payload.escalated,
+        correct=payload.correct,
+        subject=payload.subject,
+    )
+    return {"ok": True, **summary}
 
 
 @app.post("/v1/chat/completions")
