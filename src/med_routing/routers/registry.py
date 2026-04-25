@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ..config import get_settings
 from ..llm.openai_client import OpenAIClient
+from .auto import AutoRouter
 from .base import UncertaintyRouter
 from .predictive_entropy import PredictiveEntropyRouter
 from .self_consistency import SelfConsistencyRouter
@@ -40,6 +41,8 @@ def build_routers(client: OpenAIClient) -> dict[str, UncertaintyRouter]:
             strong_model=s.routellm_strong_model,
             weak_model=s.routellm_weak_model,
         )
+    # auto must be registered last so it can see all the others.
+    routers[AutoRouter.name] = AutoRouter(sub_routers=dict(routers))
     return routers
 
 
@@ -49,4 +52,5 @@ KNOWN_ROUTERS = (
     "predictive_entropy",
     "semantic_entropy",
     "routellm",
+    "auto",
 )

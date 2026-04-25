@@ -319,6 +319,49 @@ async def push_observation(payload: Observation, request: Request) -> dict[str, 
     return {"ok": True, **summary}
 
 
+class CompareRequest(BaseModel):
+    messages: list[ChatMessage]
+    routers: list[str] | None = Field(default=None, description="Subset of routers; default = all registered.")
+
+
+@app.post("/v1/compare")
+async def compare_routers(req: CompareRequest) -> JSONResponse:
+    """Fan-out one prompt to multiple routers in parallel and return each
+    router's decision side-by-side. The cascade's weak-call cache ensures we
+    pay for the weak inference once even though every router uses it."""
+    import asyncio
+    import time as _time
+
+    available = sorted(app.state.routers.keys())
+    chosen = req.routers or available
+    unknown = [r for r in chosen if r not in app.state.routers]
+    if unknown:
+        raise HTTPException(404, f"Unknown routers: {unknown}; available: {available}")
+
+    controller: CascadeController = app.state.controller
+    messages = [m.model_dump() for m in req.messages]
+
+    async def one(router_name: str) -> dict[str, Any]:
+        t0 = _time.perf_counter()
+        try:
+            res = await controller.handle(messages, router_name)
+        except Exception as exc:  # surface per-router failures without aborting the whole compare
+            return {"router": router_name, "error": str(exc)}
+        return {
+            "router": router_name,
+            "score": res.score,
+            "threshold": res.threshold,
+            "escalated": res.escalated,
+            "model_used": res.model_used,
+            "text": res.text,
+            "latency_ms": int((_time.perf_counter() - t0) * 1000),
+            "extras": res.extras,
+        }
+
+    results = await asyncio.gather(*(one(r) for r in chosen))
+    return JSONResponse(content={"prompt_sha": None, "results": results})
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest, request: Request) -> JSONResponse:
     router_name = req.router or request.headers.get("x-router")

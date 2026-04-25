@@ -17,9 +17,14 @@ class RouterScore:
 
     score: float in [0,1], higher = more uncertain (should escalate).
     extras: arbitrary diagnostics surfaced in headers/logs (kept small, JSON-safe).
+    threshold_override: optional per-call threshold the router prefers the
+        cascade use instead of the default for its registered name. Meta-routers
+        like `auto` set this to the threshold of the sub-router they delegated
+        to, so calibration stays correct across format-aware dispatch.
     """
     score: float
     extras: dict[str, Any]
+    threshold_override: float | None = None
 
 
 class UncertaintyRouter(ABC):

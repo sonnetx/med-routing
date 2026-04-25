@@ -109,6 +109,11 @@ class CascadeController:
         sampler = await self._make_sampler(messages, model=s.weak_model)
         rs = await router.score(messages=messages, weak=weak, sampler=sampler)
 
+        # Meta-routers (e.g. `auto`) can override the threshold per-call so the
+        # decision is calibrated against the sub-router they actually used.
+        if rs.threshold_override is not None:
+            threshold = rs.threshold_override
+
         UNCERTAINTY.labels(router=router_name).observe(rs.score)
         escalated = rs.score >= threshold
 

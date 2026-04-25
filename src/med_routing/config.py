@@ -20,12 +20,15 @@ class Settings(BaseSettings):
     threshold_semantic_entropy: float = Field(default=0.50, alias="THRESHOLD_SEMANTIC_ENTROPY")
     threshold_self_consistency: float = Field(default=0.40, alias="THRESHOLD_SELF_CONSISTENCY")
     threshold_routellm: float = Field(default=0.50, alias="THRESHOLD_ROUTELLM")
+    # auto delegates to a sub-router and overrides the threshold per-call to the
+    # sub-router's calibrated value, so this default is mostly ignored.
+    threshold_auto: float = Field(default=0.50, alias="THRESHOLD_AUTO")
 
     sample_n: int = Field(default=5, alias="SAMPLE_N")
     sample_temperature: float = Field(default=0.7, alias="SAMPLE_TEMPERATURE")
 
     nli_model: str = Field(
-        default="cross-encoder/nli-deberta-v3-base",
+        default="cross-encoder/nli-deberta-v3-large",
         alias="NLI_MODEL",
     )
     enable_nli: bool = Field(default=False, alias="ENABLE_NLI")
@@ -54,6 +57,7 @@ class Settings(BaseSettings):
             "semantic_entropy": self.threshold_semantic_entropy,
             "self_consistency": self.threshold_self_consistency,
             "routellm": self.threshold_routellm,
+            "auto": self.threshold_auto,
         }.get(router_name, 0.5)
 
 

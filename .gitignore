@@ -21,4 +21,7 @@ venv/
 .cache/
 hf_cache/
 
+# Test scratch dirs
+audit_test_tmp/
+
 .DS_Store

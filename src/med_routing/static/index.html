@@ -84,6 +84,33 @@
   .pill.match { background: rgba(63,185,80,0.2); color: var(--weak); }
   .gold { color: var(--weak); font-weight: 600; }
   .err { color: var(--strong); font-size: 12px; margin-top: 8px; }
+  /* batch progress bar */
+  .progress-bar { position: relative; height: 6px; background: #0d1117;
+                  border: 1px solid var(--line); border-radius: 3px; overflow: hidden;
+                  margin-top: 6px; }
+  .progress-bar > div { position: absolute; top: 0; bottom: 0; left: 0;
+                        background: var(--accent); transition: width 0.2s ease; }
+  /* compare grid */
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+                  margin-top: 12px; }
+  .compare-card { background: #0d1117; border: 1px solid var(--line);
+                  border-radius: 4px; padding: 10px; }
+  .compare-card .name { font-size: 12px; color: var(--muted);
+                        text-transform: uppercase; letter-spacing: 0.05em;
+                        font-weight: 600; }
+  .compare-card .answer-row { display: flex; align-items: center; gap: 8px;
+                              margin-top: 4px; }
+  .compare-card .answer-row .a { font-size: 22px; font-weight: 700; min-width: 22px; }
+  .compare-card .meta-line { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .compare-card .text-preview { font-size: 12px; color: var(--text); margin-top: 6px;
+                                max-height: 60px; overflow: hidden; line-height: 1.4; }
+  /* retune dialog */
+  .retune-card { display: grid; grid-template-columns: max-content 1fr max-content;
+                 gap: 8px 12px; align-items: center; padding: 8px 0;
+                 border-bottom: 1px solid var(--line); font-size: 13px; }
+  .retune-card:last-child { border-bottom: none; }
+  .retune-card .arrow { color: var(--muted); }
+  .retune-skipped { color: var(--muted); font-size: 12px; padding: 6px 0; }
 </style>
 </head>
 <body>
@@ -118,6 +145,7 @@
 
     <label style="margin-top:14px">Router</label>
     <select id="router">
+      <option value="auto" selected>auto (picks per-format)</option>
       <option value="self_consistency">self_consistency</option>
       <option value="self_reported">self_reported</option>
       <option value="predictive_entropy">predictive_entropy</option>
@@ -144,9 +172,15 @@
       <select id="batch-dataset" style="max-width:150px">
         <option value="medmcqa">MedMCQA</option>
         <option value="medqa">MedQA-USMLE</option>
+        <option value="medquad">MedQuAD (free-form)</option>
       </select>
     </div>
+    <div class="progress-bar" id="batch-bar" style="display:none"><div></div></div>
     <div id="batch-progress" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="compare-run" class="secondary">Compare all routers</button>
+      <button id="retune-open" class="secondary">Retune routers</button>
+    </div>
     <div id="err" class="err"></div>
   </section>
 
@@ -183,6 +217,27 @@
     </div>
   </section>
 </main>
+
+<section class="audit" id="compare-section" style="display:none">
+  <div class="audit-head">
+    <strong>Side-by-side router comparison</strong>
+    <span class="audit-meta">— same prompt, all enabled routers, in parallel</span>
+    <span class="audit-meta" style="margin-left:auto" id="compare-meta"></span>
+  </div>
+  <div class="audit-body" style="display:block; padding:12px">
+    <div class="compare-grid" id="compare-grid"></div>
+  </div>
+</section>
+
+<section class="audit" id="retune-section" style="display:none">
+  <div class="audit-head">
+    <strong>Threshold retune</strong>
+    <span class="audit-meta">— recommendations from labeled history. Apply to update the live cascade.</span>
+  </div>
+  <div class="audit-body" style="display:block; padding:12px">
+    <div id="retune-content"></div>
+  </div>
+</section>
 
 <section class="audit" id="audit">
   <div class="audit-head" id="audit-toggle">
@@ -245,6 +300,17 @@ function setFormat(format) {
 
 function renderExtras(router, extras) {
   if (!extras || Object.keys(extras).length === 0) return "<em>none</em>";
+  // When auto delegated, show what it picked + render the sub-router's extras.
+  if (router === "auto" && extras.auto_router) {
+    const subExtras = { ...extras };
+    delete subExtras.auto_format; delete subExtras.auto_router; delete subExtras.auto_threshold_used;
+    return `
+      <div class="extras-grid" style="margin-bottom:8px">
+        <div class="k">detected format</div><div>${extras.auto_format}</div>
+        <div class="k">delegated to</div><div><strong>${extras.auto_router}</strong></div>
+        <div class="k">threshold used</div><div>${extras.auto_threshold_used}</div>
+      </div>` + renderExtras(extras.auto_router, subExtras);
+  }
   if (router === "self_consistency" && extras.letters) {
     const modal = extras.modal;
     return `
@@ -371,13 +437,13 @@ async function loadRandom() {
       setFormat("free_form");
       $("reference").value = it.reference_answer || "";
       $("gold").value = "";
-      // self_consistency / predictive_entropy degenerate on paraphrased answers
-      // (every sample is a unique string). Default to semantic_entropy when
-      // available so the cascade has a chance of keeping any free-form weak.
+      // If user is on a router that degenerates on free-form (string-match
+      // collapses), nudge them to the format-aware default. Skipped when
+      // they're already on `auto` or `semantic_entropy`.
       const routerSel = document.getElementById("router");
       const hasSE = Array.from(routerSel.options).some(o => o.value === "semantic_entropy");
       if (hasSE && (routerSel.value === "self_consistency" || routerSel.value === "predictive_entropy")) {
-        routerSel.value = "semantic_entropy";
+        routerSel.value = "auto";
       }
     } else {
       setFormat("mcq");
@@ -444,6 +510,20 @@ async function refreshAudit() {
   }).join("");
 }
 
+function buildBatchMessages(it) {
+  // Free-form (medquad) → consumer-health prompt; otherwise MCQ template.
+  if (it.format === "free_form") {
+    return [{role:"user", content:
+      "You are a careful medical expert answering a consumer health question. " +
+      "Be accurate and concise — 1-3 sentences.\n\nQuestion: " + it.question}];
+  }
+  return [{role:"user", content:
+    `You are a careful medical expert answering a multiple-choice question.\n\n` +
+    `Question: ${it.question}\n` +
+    `A) ${it.options[0]}\nB) ${it.options[1]}\nC) ${it.options[2]}\nD) ${it.options[3]}\n\n` +
+    `Reply with a single letter (A, B, C, or D) and nothing else.`}];
+}
+
 async function runBatch() {
   const btn = $("batch-run");
   if (btn.dataset.running === "1") {
@@ -455,56 +535,186 @@ async function runBatch() {
   const dataset = $("batch-dataset").value;
   const router = $("router").value;
   const progress = $("batch-progress");
+  const bar = $("batch-bar");
   btn.dataset.running = "1";
   btn.textContent = "Stop";
   $("err").textContent = "";
-  let correct = 0, escalated = 0, done = 0;
+  bar.style.display = "block";
+  bar.firstElementChild.style.width = "0%";
+  let correct = 0, escalated = 0, done = 0, scored = 0;
   for (let i = 0; i < n; i++) {
     if (btn.dataset.running !== "1") break;
+    bar.firstElementChild.style.width = `${(i/n*100).toFixed(1)}%`;
     progress.textContent =
-      `${i}/${n} — acc ${i?(correct/i*100).toFixed(0):0}%, escalated ${i?(escalated/i*100).toFixed(0):0}%`;
+      `${i}/${n} · ${dataset} · ${router}` +
+      (scored ? ` · acc ${(correct/scored*100).toFixed(0)}%` : "") +
+      (i ? ` · escalated ${(escalated/i*100).toFixed(0)}%` : "");
     try {
       const it = await (await fetch(`/v1/eval/sample?dataset=${dataset}`)).json();
-      const messages = [{role:"user", content:
-        `You are a careful medical expert answering a multiple-choice question.\n\n` +
-        `Question: ${it.question}\n` +
-        `A) ${it.options[0]}\nB) ${it.options[1]}\nC) ${it.options[2]}\nD) ${it.options[3]}\n\n` +
-        `Reply with a single letter (A, B, C, or D) and nothing else.`}];
+      const messages = buildBatchMessages(it);
       const r = await fetch("/v1/chat/completions", {
         method: "POST", headers: {"Content-Type":"application/json"},
         body: JSON.stringify({messages, router}),
       });
       if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
       const body = await r.json();
-      const pred = (body.choices[0].message.content.match(/[A-D]/i)||[""])[0].toUpperCase();
-      const isCorrect = pred === (it.answer||"").toUpperCase();
-      if (isCorrect) correct++;
+      let isCorrect = null;
+      // We can only locally grade MCQ here; free-form needs LLM-as-judge which
+      // the runner CLI handles. For free-form we still observe (with correct=null
+      // → we just skip the correctness contribution).
+      if (it.format !== "free_form") {
+        const pred = (body.choices[0].message.content.match(/[A-D]/i)||[""])[0].toUpperCase();
+        isCorrect = pred === (it.answer||"").toUpperCase();
+        if (isCorrect) correct++;
+        scored++;
+      }
       if (body.med_routing.escalated) escalated++;
       done++;
-      await fetch("/v1/eval/observe", {
-        method: "POST", headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          router, score: body.med_routing.score,
-          escalated: body.med_routing.escalated, correct: isCorrect,
-          subject: it.subject,
-        }),
-      });
+      if (isCorrect !== null) {
+        await fetch("/v1/eval/observe", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            router, score: body.med_routing.score,
+            escalated: body.med_routing.escalated, correct: isCorrect,
+            subject: it.subject,
+          }),
+        });
+      }
     } catch (e) {
       $("err").textContent = `batch error at ${i+1}: ${e}`;
       break;
     }
   }
+  bar.firstElementChild.style.width = "100%";
   progress.textContent = done
-    ? `done: ${done} samples, acc ${(correct/done*100).toFixed(1)}%, escalated ${(escalated/done*100).toFixed(1)}%`
+    ? `done · ${done} samples · ` +
+      (scored ? `acc ${(correct/scored*100).toFixed(1)}% · ` : "") +
+      `escalated ${(escalated/done*100).toFixed(1)}%`
     : "";
   btn.dataset.running = "0";
   btn.textContent = "Run batch";
   refreshAudit();
 }
 
+async function runCompare() {
+  const messages = buildMessages();
+  if (!messages) {
+    $("err").textContent = "Fill in a question and (for MCQ) all four options.";
+    return;
+  }
+  const btn = $("compare-run");
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  $("err").textContent = "";
+  const section = $("compare-section");
+  section.style.display = "block";
+  $("compare-grid").innerHTML = '<div class="audit-empty">Routing in parallel across all enabled routers…</div>';
+  $("compare-meta").textContent = "";
+  const t0 = performance.now();
+  try {
+    const r = await fetch("/v1/compare", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({messages}),
+    });
+    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    const body = await r.json();
+    const ms = performance.now() - t0;
+    $("compare-meta").textContent = `${body.results.length} routers · ${ms.toFixed(0)} ms total`;
+    $("compare-grid").innerHTML = body.results.map(r => {
+      if (r.error) {
+        return `<div class="compare-card"><div class="name">${r.router}</div>
+                <div style="color:var(--strong);font-size:12px;margin-top:6px">error: ${r.error}</div></div>`;
+      }
+      const letter = (r.text.match(/[A-D]/i)||[""])[0].toUpperCase();
+      const badge = r.escalated
+        ? '<span class="badge strong">ESCALATED</span>'
+        : '<span class="badge weak">KEPT WEAK</span>';
+      const exceeds = r.score >= r.threshold;
+      const scorePct = (r.score*100).toFixed(1);
+      const thrPct = (r.threshold*100).toFixed(1);
+      return `<div class="compare-card">
+        <div class="name">${r.router}</div>
+        <div class="answer-row">
+          <div class="a">${letter || "?"}</div>
+          ${badge}
+        </div>
+        <div class="meta-line">score ${r.score.toFixed(3)} · threshold ${r.threshold.toFixed(2)} ${exceeds?"<strong>exceeded</strong>":"below"}</div>
+        <div class="bar"><div style="width:${scorePct}%"></div></div>
+        <div class="meta-line">model: ${r.model_used} · ${r.latency_ms} ms</div>
+        <div class="text-preview">${(r.text||"").replace(/[<>]/g,"").slice(0,200)}</div>
+      </div>`;
+    }).join("");
+    refreshAudit();
+  } catch (e) {
+    $("compare-grid").innerHTML = `<div class="audit-empty" style="color:var(--strong)">error: ${e}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Compare all routers";
+  }
+}
+
+async function openRetune() {
+  const section = $("retune-section");
+  section.style.display = "block";
+  $("retune-content").innerHTML = '<div class="audit-empty">Computing recommendations from history…</div>';
+  try {
+    const r = await fetch("/v1/feedback/recommendation?min_samples=20&target_kept_accuracy=0.75");
+    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    const body = await r.json();
+    const cards = Object.entries(body.recommendations).map(([router, rec]) => {
+      const cur = body.current_thresholds[router];
+      if (rec.skipped) {
+        return `<div class="retune-card">
+          <div><strong>${router}</strong></div>
+          <div class="retune-skipped">${rec.reason}</div>
+          <div></div>
+        </div>`;
+      }
+      const stats = rec.stats_at_threshold || {};
+      const detail = `keeps ${stats.n_would_keep}/${stats.n_total} weak ` +
+                     `(esc ${(stats.escalation_rate*100).toFixed(0)}%, ` +
+                     `kept_acc ${stats.kept_accuracy != null ? (stats.kept_accuracy*100).toFixed(0)+'%' : '—'})`;
+      return `<div class="retune-card">
+        <div><strong>${router}</strong></div>
+        <div>
+          <span class="region-pill">${cur}</span>
+          <span class="arrow">→</span>
+          <span class="region-pill foreign">${rec.threshold}</span>
+          <div class="retune-skipped">${detail}</div>
+        </div>
+        <button class="secondary" data-router="${router}" data-threshold="${rec.threshold}"
+                onclick="applyRetune(this)">Apply</button>
+      </div>`;
+    }).join("");
+    $("retune-content").innerHTML = cards || '<div class="audit-empty">No routers found.</div>';
+  } catch (e) {
+    $("retune-content").innerHTML = `<div class="audit-empty" style="color:var(--strong)">error: ${e}</div>`;
+  }
+}
+
+async function applyRetune(btn) {
+  const router = btn.dataset.router;
+  const threshold = parseFloat(btn.dataset.threshold);
+  btn.disabled = true; btn.textContent = "Applying…";
+  try {
+    const r = await fetch("/v1/feedback/apply", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({router, threshold, reason: "applied via UI retune"}),
+    });
+    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    btn.textContent = "Applied ✓";
+    btn.style.background = "rgba(63,185,80,0.2)";
+  } catch (e) {
+    btn.textContent = "Failed";
+    btn.style.background = "rgba(248,81,73,0.2)";
+  }
+}
+
 $("run").addEventListener("click", async () => { await run(); refreshAudit(); });
 $("rand").addEventListener("click", loadRandom);
 $("batch-run").addEventListener("click", runBatch);
+$("compare-run").addEventListener("click", runCompare);
+$("retune-open").addEventListener("click", openRetune);
 $("audit-toggle").addEventListener("click", () => {
   document.getElementById("audit").classList.toggle("open");
   refreshAudit();
