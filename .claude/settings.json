@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs wc *)",
+      "Bash(pip --version)",
+      "Bash(python -m pytest -q)"
+    ]
+  }
+}

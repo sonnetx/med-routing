@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: med-routing
+    orgId: 1
+    folder: med-routing
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
