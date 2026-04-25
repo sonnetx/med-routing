@@ -27,4 +27,8 @@ audit_test_tmp/
 # Pickled artifacts produced by med_routing.train.fit
 models/
 
+# Per-run training corpora produced by med_routing.train.collect.
+# Reproducible from the committed data/med_routing.db, so we don't ship them.
+runs/train_*.jsonl
+
 .DS_Store
