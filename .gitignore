@@ -14,7 +14,9 @@ venv/
 .ruff_cache/
 .mypy_cache/
 
-*.jsonl
+# SQLite transient sidecars (the .db itself is committed)
+*.db-wal
+*.db-shm
 
 .cache/
 hf_cache/
