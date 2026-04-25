@@ -52,6 +52,21 @@ CREATE TABLE IF NOT EXISTS eval_rows (
 
 CREATE INDEX IF NOT EXISTS idx_eval_router ON eval_rows(router);
 CREATE INDEX IF NOT EXISTS idx_eval_ts ON eval_rows(ts);
+
+CREATE TABLE IF NOT EXISTS runtime_thresholds (
+    router TEXT PRIMARY KEY,
+    threshold REAL NOT NULL,
+    applied_at TEXT NOT NULL,
+    reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS threshold_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    router TEXT NOT NULL,
+    threshold REAL NOT NULL,
+    applied_at TEXT NOT NULL,
+    reason TEXT
+);
 """
 
 DECISION_COLS = (
@@ -143,6 +158,40 @@ class Store:
         if since:
             sql += " AND ts >= ?"
             params.append(since)
+        sql += " ORDER BY id DESC LIMIT ?"
+        params.append(int(limit))
+        with self._connect() as c:
+            return [dict(r) for r in c.execute(sql, params).fetchall()]
+
+    def set_threshold(self, *, router: str, threshold: float, reason: str = "") -> None:
+        ts = dt.datetime.now(dt.timezone.utc).isoformat()
+        with self._lock, self._connect() as c:
+            c.execute(
+                "INSERT INTO runtime_thresholds (router, threshold, applied_at, reason) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(router) DO UPDATE SET threshold=excluded.threshold, "
+                "applied_at=excluded.applied_at, reason=excluded.reason",
+                (router, float(threshold), ts, reason),
+            )
+            c.execute(
+                "INSERT INTO threshold_history (router, threshold, applied_at, reason) "
+                "VALUES (?, ?, ?, ?)",
+                (router, float(threshold), ts, reason),
+            )
+
+    def get_thresholds(self) -> dict[str, float]:
+        with self._connect() as c:
+            return {
+                r["router"]: float(r["threshold"])
+                for r in c.execute("SELECT router, threshold FROM runtime_thresholds").fetchall()
+            }
+
+    def threshold_history(self, *, router: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM threshold_history"
+        params: list[Any] = []
+        if router:
+            sql += " WHERE router = ?"
+            params.append(router)
         sql += " ORDER BY id DESC LIMIT ?"
         params.append(int(limit))
         with self._connect() as c:

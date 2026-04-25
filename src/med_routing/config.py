@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     db_path: str = Field(default="data/med_routing.db", alias="DB_PATH")
 
     def threshold_for(self, router_name: str) -> float:
+        # Runtime overrides (set by the feedback loop) win over env defaults.
+        if router_name in _RUNTIME_OVERRIDES:
+            return _RUNTIME_OVERRIDES[router_name]
         return {
             "self_reported": self.threshold_self_reported,
             "predictive_entropy": self.threshold_predictive_entropy,
@@ -57,3 +60,22 @@ def cost_usd(model: str, prompt_tokens: int, completion_tokens: int) -> float:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+# Runtime threshold overrides — populated at startup from the SQLite store and
+# updated when the feedback endpoint applies a new recommendation. Reading from
+# this dict is hot-path (every cascade decision); use a plain dict with single-
+# writer-multi-reader access pattern.
+_RUNTIME_OVERRIDES: dict[str, float] = {}
+
+
+def set_runtime_threshold(router: str, threshold: float) -> None:
+    _RUNTIME_OVERRIDES[router] = float(threshold)
+
+
+def clear_runtime_threshold(router: str) -> None:
+    _RUNTIME_OVERRIDES.pop(router, None)
+
+
+def runtime_overrides() -> dict[str, float]:
+    return dict(_RUNTIME_OVERRIDES)

@@ -16,8 +16,14 @@ from pydantic import BaseModel, Field
 from .audit import AuditLogger
 from .cache import CompletionCache
 from .cascade import CascadeController
-from .config import get_settings
+from .config import (
+    clear_runtime_threshold,
+    get_settings,
+    runtime_overrides,
+    set_runtime_threshold,
+)
 from .eval.aggregator import EvalAggregator
+from .feedback import recommend_for_all
 from .fhir import decision_to_audit_event, to_bundle
 from .llm.openai_client import OpenAIClient
 from .metrics import ACCURACY, REGISTRY
@@ -49,6 +55,12 @@ class Observation(BaseModel):
     subject: str | None = None
 
 
+class ThresholdApply(BaseModel):
+    router: str
+    threshold: float
+    reason: str = "manual override"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
@@ -56,6 +68,9 @@ async def lifespan(app: FastAPI):
     routers = build_routers(client)
     cache = CompletionCache()
     store = Store(s.db_path)
+    # Reload any persisted runtime threshold overrides so they survive restarts.
+    for router_name, thr in store.get_thresholds().items():
+        set_runtime_threshold(router_name, thr)
     audit = AuditLogger(root=Path(s.audit_dir), store=store)
     app.state.controller = CascadeController(client=client, routers=routers, cache=cache, audit=audit)
     app.state.routers = routers
@@ -147,6 +162,74 @@ async def query_decisions(
             headers={"Content-Disposition": "attachment; filename=decisions.csv"},
         )
     return rows
+
+
+@app.get("/v1/feedback/recommendation")
+async def feedback_recommendation(
+    target_kept_accuracy: float = 0.85,
+    min_samples: int = 30,
+    limit_per_router: int = 5000,
+) -> dict[str, Any]:
+    """Sweep historical eval rows by router and recommend a new threshold for
+    each router that has enough data. Returns recommendations only — no live
+    state is changed. Use POST /v1/feedback/apply to commit a recommendation.
+    """
+    store = app.state.store
+    rows_by_router: dict[str, list[dict[str, Any]]] = {}
+    for r in app.state.routers:
+        rows_by_router[r] = store.query_eval(router=r, limit=limit_per_router)
+
+    s = get_settings()
+    return {
+        "target_kept_accuracy": target_kept_accuracy,
+        "min_samples": min_samples,
+        "current_thresholds": {r: s.threshold_for(r) for r in app.state.routers},
+        "runtime_overrides": runtime_overrides(),
+        "recommendations": recommend_for_all(
+            rows_by_router,
+            target_kept_accuracy=target_kept_accuracy,
+            min_samples=min_samples,
+        ),
+        "n_labeled_rows": {r: len(rows) for r, rows in rows_by_router.items()},
+    }
+
+
+@app.post("/v1/feedback/apply")
+async def feedback_apply(payload: ThresholdApply) -> dict[str, Any]:
+    if payload.router not in app.state.routers:
+        raise HTTPException(404, f"Unknown router {payload.router!r}")
+    if not 0.0 <= payload.threshold <= 1.0:
+        raise HTTPException(400, "threshold must be in [0, 1]")
+    app.state.store.set_threshold(
+        router=payload.router, threshold=payload.threshold, reason=payload.reason,
+    )
+    set_runtime_threshold(payload.router, payload.threshold)
+    return {
+        "ok": True,
+        "router": payload.router,
+        "threshold": payload.threshold,
+        "effective_now": True,
+    }
+
+
+@app.delete("/v1/feedback/apply/{router}")
+async def feedback_clear(router: str) -> dict[str, Any]:
+    if router not in app.state.routers:
+        raise HTTPException(404, f"Unknown router {router!r}")
+    clear_runtime_threshold(router)
+    # Note: history is kept; the override row stays in runtime_thresholds until
+    # next apply. For a hackathon this is fine — purge logic can come later.
+    return {"ok": True, "cleared": router}
+
+
+@app.get("/v1/feedback/thresholds")
+async def feedback_thresholds() -> dict[str, Any]:
+    s = get_settings()
+    return {
+        "effective": {r: s.threshold_for(r) for r in app.state.routers},
+        "runtime_overrides": runtime_overrides(),
+        "history": app.state.store.threshold_history(limit=20),
+    }
 
 
 @app.get("/v1/audit/decisions.fhir")

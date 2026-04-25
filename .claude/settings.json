@@ -64,7 +64,18 @@
       "Bash(curl -s 'http://localhost:8000/v1/audit/decisions.fhir?limit=1')",
       "Bash(curl -s 'http://localhost:8000/v1/audit/decisions.fhir?limit=2&format=bundle')",
       "Bash(python -c \"import sys,json; b=json.load\\(sys.stdin\\); print\\('resourceType:',b['resourceType'],'type:',b['type'],'total:',b['total']\\); print\\('first entry resourceType:',b['entry'][0]['resource']['resourceType'],'outcome:',b['entry'][0]['resource']['outcomeDesc']\\)\")",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git status *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(cat .git/info/exclude)",
+      "Bash(curl -s http://localhost:8000/v1/feedback/thresholds)",
+      "Bash(curl -s 'http://localhost:8000/v1/feedback/recommendation?min_samples=3&target_kept_accuracy=0.85')",
+      "Bash(HF_HOME=./hf_cache python -m med_routing.eval.runner --router self_consistency --n 30 --push-every 10)",
+      "Bash(HF_HOME=./hf_cache python -m med_routing.eval.runner --router self_reported --n 30 --push-every 10)",
+      "Bash(HF_HOME=./hf_cache python -m med_routing.eval.runner --router predictive_entropy --n 30 --push-every 10)",
+      "Bash(curl -s 'http://localhost:8000/v1/feedback/recommendation?min_samples=20&target_kept_accuracy=0.85')",
+      "Bash(curl -s -X POST http://localhost:8000/v1/feedback/apply -H 'Content-Type: application/json' -d '{\"router\":\"self_consistency\",\"threshold\":0.20,\"reason\":\"demo: tighter than default 0.4\"}')",
+      "Bash(curl -s -X POST http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{ *)"
     ]
   }
 }
