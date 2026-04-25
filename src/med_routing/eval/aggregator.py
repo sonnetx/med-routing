@@ -38,8 +38,9 @@ class EvalAggregator:
     quantities are pushed as Gauges every time observe() is called.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, store: object | None = None) -> None:
         self._t: dict[str, _RouterTally] = defaultdict(_RouterTally)
+        self._store = store
 
     def observe(
         self,
@@ -83,6 +84,15 @@ class EvalAggregator:
 
         ece = self._compute_ece(t)
         ECE.labels(router=router).set(ece)
+
+        if self._store is not None:
+            try:
+                self._store.insert_eval_row(
+                    router=router, score=score, escalated=escalated,
+                    correct=correct, subject=subject,
+                )
+            except Exception:
+                pass
 
         return {
             "accuracy": t.correct / t.total if t.total else 0.0,

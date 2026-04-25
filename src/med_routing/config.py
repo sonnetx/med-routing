@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     home_region: str = Field(default="US", alias="HOME_REGION")
     audit_dir: str = Field(default="audit", alias="AUDIT_DIR")
+    db_path: str = Field(default="data/med_routing.db", alias="DB_PATH")
 
     def threshold_for(self, router_name: str) -> float:
         return {

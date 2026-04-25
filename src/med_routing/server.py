@@ -21,6 +21,7 @@ from .eval.aggregator import EvalAggregator
 from .llm.openai_client import OpenAIClient
 from .metrics import ACCURACY, REGISTRY
 from .routers.registry import KNOWN_ROUTERS, build_routers
+from .store import DECISION_COLS, EVAL_COLS, Store, iter_csv
 
 
 class ChatMessage(BaseModel):
@@ -53,11 +54,13 @@ async def lifespan(app: FastAPI):
     client = OpenAIClient()
     routers = build_routers(client)
     cache = CompletionCache()
-    audit = AuditLogger(root=Path(s.audit_dir))
+    store = Store(s.db_path)
+    audit = AuditLogger(root=Path(s.audit_dir), store=store)
     app.state.controller = CascadeController(client=client, routers=routers, cache=cache, audit=audit)
     app.state.routers = routers
-    app.state.aggregator = EvalAggregator()
+    app.state.aggregator = EvalAggregator(store=store)
     app.state.audit = audit
+    app.state.store = store
     app.state.medmcqa_pool = None  # lazily filled on first /v1/eval/sample
     yield
     audit.close()
@@ -117,6 +120,52 @@ async def push_accuracy(payload: AccuracyUpdate) -> dict[str, Any]:
 async def audit_recent(limit: int = 20) -> list[dict[str, Any]]:
     """Recent decision rows from the audit log (in-memory ring buffer)."""
     return app.state.audit.recent(limit=max(1, min(limit, 200)))
+
+
+@app.get("/v1/audit/stats")
+async def audit_stats() -> dict[str, Any]:
+    return app.state.store.stats()
+
+
+@app.get("/v1/audit/decisions")
+async def query_decisions(
+    limit: int = 100,
+    since: str | None = None,
+    router: str | None = None,
+    cross_border_only: bool = False,
+    format: str = "json",
+):
+    rows = app.state.store.query_decisions(
+        limit=max(1, min(limit, 10_000)),
+        since=since, router=router, cross_border_only=cross_border_only,
+    )
+    if format == "csv":
+        return Response(
+            content="".join(iter_csv(rows, DECISION_COLS)),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=decisions.csv"},
+        )
+    return rows
+
+
+@app.get("/v1/audit/eval")
+async def query_eval(
+    limit: int = 1000,
+    since: str | None = None,
+    router: str | None = None,
+    format: str = "json",
+):
+    rows = app.state.store.query_eval(
+        limit=max(1, min(limit, 100_000)),
+        since=since, router=router,
+    )
+    if format == "csv":
+        return Response(
+            content="".join(iter_csv(rows, EVAL_COLS)),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=eval_rows.csv"},
+        )
+    return rows
 
 
 @app.post("/v1/eval/observe")

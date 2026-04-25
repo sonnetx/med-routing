@@ -9,6 +9,8 @@ services:
     volumes:
       - ./hf_cache:/app/hf_cache
       - ./runs:/app/runs
+      - ./audit:/app/audit
+      - ./data:/app/data
 
   prometheus:
     image: prom/prometheus:v2.55.1

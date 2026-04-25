@@ -17,13 +17,19 @@ class AuditLogger:
     without parsing the file on every request.
     """
 
-    def __init__(self, root: Path | None = None, recent_size: int = 200) -> None:
+    def __init__(
+        self,
+        root: Path | None = None,
+        recent_size: int = 200,
+        store: Any | None = None,
+    ) -> None:
         self.root = Path(root) if root else Path("audit")
         self.root.mkdir(parents=True, exist_ok=True)
         self._fp: TextIO | None = None
         self._date: str | None = None
         self._lock = threading.Lock()
         self._recent: deque[dict[str, Any]] = deque(maxlen=recent_size)
+        self._store = store  # optional Store; persisted across restarts
 
     @staticmethod
     def _today() -> str:
@@ -49,6 +55,13 @@ class AuditLogger:
             fp = self._ensure_open()
             fp.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
             self._recent.append(row)
+        if self._store is not None:
+            try:
+                self._store.insert_decision(row)
+            except Exception:
+                # Storing should never break the request; the JSONL log is the
+                # durable source of truth, the DB is a convenience replica.
+                pass
 
     def recent(self, limit: int = 20) -> list[dict[str, Any]]:
         with self._lock:
