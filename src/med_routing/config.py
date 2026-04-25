@@ -28,6 +28,9 @@ class Settings(BaseSettings):
 
     cache_size: int = Field(default=2048, alias="CACHE_SIZE")
 
+    home_region: str = Field(default="US", alias="HOME_REGION")
+    audit_dir: str = Field(default="audit", alias="AUDIT_DIR")
+
     def threshold_for(self, router_name: str) -> float:
         return {
             "self_reported": self.threshold_self_reported,

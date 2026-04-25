@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
+from .audit import AuditLogger
 from .cache import CompletionCache
 from .cascade import CascadeController
 from .config import get_settings
@@ -48,14 +49,18 @@ class Observation(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    s = get_settings()
     client = OpenAIClient()
     routers = build_routers(client)
     cache = CompletionCache()
-    app.state.controller = CascadeController(client=client, routers=routers, cache=cache)
+    audit = AuditLogger(root=Path(s.audit_dir))
+    app.state.controller = CascadeController(client=client, routers=routers, cache=cache, audit=audit)
     app.state.routers = routers
     app.state.aggregator = EvalAggregator()
+    app.state.audit = audit
     app.state.medmcqa_pool = None  # lazily filled on first /v1/eval/sample
     yield
+    audit.close()
 
 
 app = FastAPI(title="med-routing", version="0.1.0", lifespan=lifespan)
@@ -106,6 +111,12 @@ async def push_accuracy(payload: AccuracyUpdate) -> dict[str, Any]:
     """Eval runner pushes rolling accuracy here so Grafana shows it live."""
     ACCURACY.labels(router=payload.router).set(payload.accuracy)
     return {"ok": True}
+
+
+@app.get("/v1/audit/recent")
+async def audit_recent(limit: int = 20) -> list[dict[str, Any]]:
+    """Recent decision rows from the audit log (in-memory ring buffer)."""
+    return app.state.audit.recent(limit=max(1, min(limit, 200)))
 
 
 @app.post("/v1/eval/observe")

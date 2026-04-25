@@ -6,7 +6,8 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from ..config import cost_usd, get_settings
-from ..metrics import MODEL_CALLS_TOTAL, record_usage
+from ..metrics import MODEL_CALLS_TOTAL, PROCESSOR_CALLS_TOTAL, record_usage
+from ..processors import get_processor
 
 
 @dataclass
@@ -94,6 +95,8 @@ class OpenAIClient:
         cost_per_call = cost_usd(model, prompt_tokens, completion_tokens)
 
         MODEL_CALLS_TOTAL.labels(model=model, tier=tier).inc(total)
+        proc = get_processor(model)
+        PROCESSOR_CALLS_TOTAL.labels(processor=proc.name, entity=proc.entity, region=proc.region).inc(total)
         record_usage(model, prompt_tokens, completion_tokens, cost_per_call)
 
         out: list[Completion] = []

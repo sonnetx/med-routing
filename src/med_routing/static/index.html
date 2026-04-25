@@ -55,6 +55,27 @@
                       background: var(--accent); }
   pre { background: #0d1117; border: 1px solid var(--line); border-radius: 4px;
         padding: 10px; font-size: 12px; overflow-x: auto; max-height: 240px; }
+  .audit { max-width: 1100px; margin: 0 auto 24px; padding: 0 20px; }
+  .audit-head { display: flex; align-items: center; gap: 10px; cursor: pointer;
+                user-select: none; padding: 8px 0; }
+  .audit-head .caret { color: var(--muted); transition: transform 0.15s; }
+  .audit.open .audit-head .caret { transform: rotate(90deg); }
+  .audit-body { display: none; background: var(--panel); border: 1px solid var(--line);
+                border-radius: 6px; padding: 0; overflow: hidden; }
+  .audit.open .audit-body { display: block; }
+  table.audit-table { width: 100%; border-collapse: collapse; font-size: 12px;
+                      font-family: ui-monospace, Consolas, monospace; }
+  table.audit-table th { text-align: left; padding: 8px 10px; background: #0d1117;
+                         border-bottom: 1px solid var(--line); color: var(--muted);
+                         font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  table.audit-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  table.audit-table tr:last-child td { border-bottom: none; }
+  table.audit-table tr.cross-border td { background: rgba(248,81,73,0.08); }
+  .region-pill { display: inline-block; padding: 1px 6px; border-radius: 3px;
+                 background: rgba(63,185,80,0.15); color: var(--weak); font-size: 11px; }
+  .region-pill.foreign { background: rgba(248,81,73,0.18); color: var(--strong); }
+  .audit-empty { padding: 20px; color: var(--muted); text-align: center; font-size: 12px; }
+  .audit-meta { color: var(--muted); font-size: 12px; }
   .extras-grid { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; }
   .extras-grid .k { color: var(--muted); }
   .pill-row { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -137,6 +158,35 @@
     </div>
   </section>
 </main>
+
+<section class="audit" id="audit">
+  <div class="audit-head" id="audit-toggle">
+    <span class="caret">▶</span>
+    <strong>Audit log</strong>
+    <span class="audit-meta">— GDPR Art. 30 record of processing. Prompt-hash only, no PHI.</span>
+    <span class="audit-meta" style="margin-left:auto" id="audit-count"></span>
+  </div>
+  <div class="audit-body">
+    <table class="audit-table" id="audit-table">
+      <thead>
+        <tr>
+          <th>time</th>
+          <th>prompt sha</th>
+          <th>router</th>
+          <th>score</th>
+          <th>decision</th>
+          <th>processors → regions</th>
+          <th>tokens</th>
+          <th>cost (actual / all-strong)</th>
+          <th>latency</th>
+        </tr>
+      </thead>
+      <tbody id="audit-rows">
+        <tr><td colspan="9" class="audit-empty">No decisions yet — submit a question above.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -287,8 +337,67 @@ async function loadRandom() {
   }
 }
 
-$("run").addEventListener("click", run);
+function fmtTime(ts) {
+  try {
+    return new Date(ts).toLocaleTimeString();
+  } catch (e) { return ts; }
+}
+
+function fmtCost(usd) {
+  if (usd == null) return "—";
+  if (usd === 0) return "$0";
+  return "$" + usd.toFixed(usd < 0.01 ? 6 : 4);
+}
+
+function regionPill(region, isHome) {
+  const cls = isHome ? "region-pill" : "region-pill foreign";
+  return `<span class="${cls}">${region}</span>`;
+}
+
+async function refreshAudit() {
+  let rows;
+  try {
+    const r = await fetch("/v1/audit/recent?limit=20");
+    if (!r.ok) return;
+    rows = await r.json();
+  } catch (e) { return; }
+
+  const tbody = document.getElementById("audit-rows");
+  document.getElementById("audit-count").textContent = `${rows.length} record${rows.length===1?"":"s"}`;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="audit-empty">No decisions yet — submit a question above.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.slice().reverse().map(row => {
+    const home = row.home_region;
+    const procRegion = (row.regions_touched || []).map(r => regionPill(r, r === home)).join(" ");
+    const procName = row.escalated
+      ? `${row.weak_processor} → ${row.strong_processor}`
+      : row.weak_processor;
+    return `
+      <tr class="${row.cross_border ? "cross-border" : ""}">
+        <td>${fmtTime(row.ts)}</td>
+        <td title="${row.prompt_sha}">${(row.prompt_sha||"").slice(0,10)}…</td>
+        <td>${row.router}</td>
+        <td>${(row.score ?? 0).toFixed(3)}</td>
+        <td><span class="badge ${row.escalated?'strong':'weak'}">${row.escalated?'STRONG':'WEAK'}</span></td>
+        <td>${procName} → ${procRegion}</td>
+        <td>${(row.tokens_prompt||0)+(row.tokens_completion||0)}</td>
+        <td>${fmtCost(row.cost_usd)} <span style="color:var(--muted)">/ ${fmtCost(row.counterfactual_usd)}</span></td>
+        <td>${row.latency_ms ?? "—"} ms</td>
+      </tr>`;
+  }).join("");
+}
+
+$("run").addEventListener("click", async () => { await run(); refreshAudit(); });
 $("rand").addEventListener("click", loadRandom);
+$("audit-toggle").addEventListener("click", () => {
+  document.getElementById("audit").classList.toggle("open");
+  refreshAudit();
+});
+
+// Initial population on page load (will show "No decisions yet" if empty).
+refreshAudit();
 </script>
 </body>
 </html>

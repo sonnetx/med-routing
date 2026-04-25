@@ -4,16 +4,20 @@ from typing import Any
 
 import pytest
 
+from med_routing.config import cost_usd
 from med_routing.llm.openai_client import Completion, TokenLogprob
+from med_routing.metrics import MODEL_CALLS_TOTAL, PROCESSOR_CALLS_TOTAL
+from med_routing.processors import get_processor
 
 
 def make_completion(text: str, *, logprobs: list[TokenLogprob] | None = None, model: str = "gpt-4o-mini") -> Completion:
+    prompt_tokens, completion_tokens = 10, 2
     return Completion(
         model=model,
         text=text,
-        prompt_tokens=10,
-        completion_tokens=2,
-        cost=0.0,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        cost=cost_usd(model, prompt_tokens, completion_tokens),
         logprobs=logprobs,
     )
 
@@ -58,8 +62,15 @@ class FakeOpenAIClient:
         )
         bucket = self._scripts.get((model, n))
         if bucket:
-            return bucket.pop(0)
-        return [make_completion(self.default_text, model=model) for _ in range(n)]
+            out = bucket.pop(0)
+        else:
+            out = [make_completion(self.default_text, model=model) for _ in range(n)]
+        # Mirror the real client's metric side-effects so cascade-level tests reflect
+        # the actual call-boundary contract.
+        MODEL_CALLS_TOTAL.labels(model=model, tier=tier).inc(len(out))
+        proc = get_processor(model)
+        PROCESSOR_CALLS_TOTAL.labels(processor=proc.name, entity=proc.entity, region=proc.region).inc(len(out))
+        return out
 
 
 @pytest.fixture

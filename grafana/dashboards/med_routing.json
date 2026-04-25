@@ -281,11 +281,202 @@
       "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true }
     },
     {
+      "id": 13,
+      "type": "stat",
+      "title": "💰 Total savings vs all-strong baseline",
+      "description": "How much we saved by routing some queries to the weak model instead of sending every query to GPT-4o.",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 50 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(medr_counterfactual_cost_usd_total) - sum(medr_actual_cost_usd_total)",
+          "legendFormat": "savings",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0 },
+              { "color": "green", "value": 0.001 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "area",
+        "colorMode": "value",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Savings rate per router",
+      "description": "Fraction of all-strong cost saved by routing through this uncertainty router. 1.0 = 100% saved (always weak); 0 = no savings (always strong).",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 50 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "1 - (medr_actual_cost_usd_total / clamp_min(medr_counterfactual_cost_usd_total, 0.0000001))",
+          "legendFormat": "{{router}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "green", "value": 0.8 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "value_and_name"
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Actual vs counterfactual cumulative spend",
+      "description": "Solid lines: what we paid. Dashed lines: what we would have paid sending every query to GPT-4o. The gap is savings.",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 50 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "medr_actual_cost_usd_total",
+          "legendFormat": "actual / {{router}}",
+          "refId": "A"
+        },
+        {
+          "expr": "medr_counterfactual_cost_usd_total",
+          "legendFormat": "all-strong / {{router}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 4,
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "all-strong.*" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 16,
+      "type": "piechart",
+      "title": "🌍 Data residency: calls by region",
+      "description": "Where the data physically went. Driven by the model→processor registry. GDPR Art. 30 + Art. 46 evidence.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (region) (medr_processor_calls_total)",
+          "legendFormat": "{{region}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "displayLabels": ["percent"]
+      },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 17,
+      "type": "barchart",
+      "title": "Processor breakdown",
+      "description": "Calls per legal processor (data controller).",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (processor, entity) (medr_processor_calls_total)",
+          "legendFormat": "{{entity}} / {{processor}}",
+          "refId": "A",
+          "instant": true,
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none"
+      },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "🚨 Cross-border egress events",
+      "description": "Requests where data left the configured HOME_REGION. Each label combination shows: router → foreign region.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (router, foreign_region) (medr_cross_border_total)",
+          "legendFormat": "{{router}} → {{foreign_region}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 100 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "value",
+        "textMode": "value_and_name"
+      }
+    },
+    {
       "id": 12,
       "type": "heatmap",
       "title": "Accuracy by MedMCQA subject",
       "description": "Per-subject accuracy. Watch for collapse on high-stakes subjects (Surgery, Pediatrics).",
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 41 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 64 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {

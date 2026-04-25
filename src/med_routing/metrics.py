@@ -32,6 +32,21 @@ COST_USD_TOTAL = Counter(
     registry=REGISTRY,
 )
 
+ACTUAL_COST_BY_ROUTER = Counter(
+    "medr_actual_cost_usd_total",
+    "Cumulative actual spend per router (weak + any strong escalation).",
+    ["router"],
+    registry=REGISTRY,
+)
+
+COUNTERFACTUAL_COST_BY_ROUTER = Counter(
+    "medr_counterfactual_cost_usd_total",
+    "What the request would have cost if every query went straight to the strong model. "
+    "Difference vs actual is the routing savings.",
+    ["router"],
+    registry=REGISTRY,
+)
+
 UNCERTAINTY = Histogram(
     "medr_uncertainty",
     "Distribution of router uncertainty scores in [0,1].",
@@ -129,3 +144,21 @@ def record_usage(model: str, prompt_tokens: int, completion_tokens: int, cost: f
     TOKENS_TOTAL.labels(model=model, kind="prompt").inc(prompt_tokens)
     TOKENS_TOTAL.labels(model=model, kind="completion").inc(completion_tokens)
     COST_USD_TOTAL.labels(model=model).inc(cost)
+
+
+# GDPR / data-residency observability. Every model call is one egress event from
+# the wrapper to a third-party processor; cross-border counts when the call
+# leaves the configured home region.
+PROCESSOR_CALLS_TOTAL = Counter(
+    "medr_processor_calls_total",
+    "Calls to each underlying processor, by region (Art. 30 records of processing).",
+    ["processor", "entity", "region"],
+    registry=REGISTRY,
+)
+
+CROSS_BORDER_TOTAL = Counter(
+    "medr_cross_border_total",
+    "Requests where data left the configured home region.",
+    ["router", "home_region", "foreign_region"],
+    registry=REGISTRY,
+)

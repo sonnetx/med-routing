@@ -49,6 +49,9 @@ med-routing-eval = "med_routing.eval.runner:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+med_routing = ["static/*.html", "static/*.css", "static/*.js"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
