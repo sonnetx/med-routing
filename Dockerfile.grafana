@@ -1,0 +1,21 @@
+FROM grafana/grafana:11.3.0
+
+ENV GF_SECURITY_ADMIN_USER=admin \
+    GF_SECURITY_ADMIN_PASSWORD=admin \
+    GF_AUTH_ANONYMOUS_ENABLED=true \
+    GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer \
+    GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/med_routing.json \
+    GF_SECURITY_ALLOW_EMBEDDING=true \
+    GF_SECURITY_COOKIE_SAMESITE=none \
+    GF_SECURITY_COOKIE_SECURE=true \
+    GF_INSTALL_PLUGINS=frser-sqlite-datasource
+
+# Bake provisioning + dashboards into image. We swap the prometheus URL for
+# Railway's internal DNS via the .railway.yml variant.
+COPY grafana/provisioning/datasources/datasource.railway.yml /etc/grafana/provisioning/datasources/datasource.yml
+COPY grafana/provisioning/dashboards/dashboards.yml /etc/grafana/provisioning/dashboards/dashboards.yml
+COPY grafana/dashboards/ /var/lib/grafana/dashboards/
+
+# We intentionally drop sqlite.yml (and the history dashboard's panels will
+# error gracefully) — the SQLite file lives on the app service's volume,
+# unreachable from the Grafana service in Railway's per-service-volume model.
