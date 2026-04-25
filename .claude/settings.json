@@ -75,7 +75,9 @@
       "Bash(HF_HOME=./hf_cache python -m med_routing.eval.runner --router predictive_entropy --n 30 --push-every 10)",
       "Bash(curl -s 'http://localhost:8000/v1/feedback/recommendation?min_samples=20&target_kept_accuracy=0.85')",
       "Bash(curl -s -X POST http://localhost:8000/v1/feedback/apply -H 'Content-Type: application/json' -d '{\"router\":\"self_consistency\",\"threshold\":0.20,\"reason\":\"demo: tighter than default 0.4\"}')",
-      "Bash(curl -s -X POST http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{ *)"
+      "Bash(curl -s -X POST http://localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(HF_HOME=./hf_cache python -m med_routing.eval.runner --dataset medqa --router self_consistency --n 30 --push-every 10)",
+      "Bash(HF_HOME=./hf_cache python -m med_routing.eval.runner --dataset medquad --router self_consistency --n 15 --push-every 5)"
     ]
   }
 }

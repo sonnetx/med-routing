@@ -100,24 +100,41 @@ async def health() -> dict[str, Any]:
 
 
 @app.get("/v1/eval/sample")
-async def sample_question() -> dict[str, Any]:
-    """Return a random MedMCQA validation item for the demo UI."""
-    pool = app.state.medmcqa_pool
-    if pool is None:
-        from .eval.medmcqa import load_medmcqa
-
-        pool = list(load_medmcqa(split="validation", limit=200))
-        app.state.medmcqa_pool = pool
+async def sample_question(dataset: str = "medmcqa") -> dict[str, Any]:
+    """Return a random eval item for the demo UI. medmcqa/medqa = MCQ;
+    medquad = free-form (no options, reference_answer instead)."""
+    if dataset not in ("medmcqa", "medqa", "medquad"):
+        raise HTTPException(400, "dataset must be 'medmcqa', 'medqa', or 'medquad'")
+    pools = app.state.medmcqa_pool or {}
+    if dataset not in pools:
+        if dataset == "medmcqa":
+            from .eval.medmcqa import load_medmcqa
+            pools["medmcqa"] = list(load_medmcqa(split="validation", limit=200))
+        elif dataset == "medqa":
+            from .eval.medqa import load_medqa
+            pools["medqa"] = list(load_medqa(split="test", limit=200))
+        else:
+            from .eval.medquad import load_medquad
+            pools["medquad"] = list(load_medquad(split="train", limit=200))
+        app.state.medmcqa_pool = pools
+    pool = pools[dataset]
     if not pool:
-        raise HTTPException(503, "MedMCQA pool empty")
+        raise HTTPException(503, f"{dataset} pool empty")
     item = random.choice(pool)
-    return {
+    out: dict[str, Any] = {
         "qid": item.qid,
         "question": item.question,
-        "options": list(item.options),
-        "answer": item.answer,
         "subject": item.subject,
+        "dataset": dataset,
     }
+    if dataset == "medquad":
+        out["reference_answer"] = item.reference_answer
+        out["format"] = "free_form"
+    else:
+        out["options"] = list(item.options)
+        out["answer"] = item.answer
+        out["format"] = "mcq"
+    return out
 
 
 @app.get("/metrics")

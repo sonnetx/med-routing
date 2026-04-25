@@ -100,15 +100,21 @@
   <section class="panel">
     <h2>question</h2>
     <label for="q">Question</label>
-    <textarea id="q" placeholder="Type or load a random MedMCQA question..."></textarea>
-    <div class="options">
-      <div><label>A</label><input id="opa" /></div>
-      <div><label>B</label><input id="opb" /></div>
-      <div><label>C</label><input id="opc" /></div>
-      <div><label>D</label><input id="opd" /></div>
+    <textarea id="q" placeholder="Type or load a random question..."></textarea>
+    <div id="mcq-fields">
+      <div class="options">
+        <div><label>A</label><input id="opa" /></div>
+        <div><label>B</label><input id="opb" /></div>
+        <div><label>C</label><input id="opc" /></div>
+        <div><label>D</label><input id="opd" /></div>
+      </div>
+      <label>Gold answer (A–D, optional)</label>
+      <input id="gold" maxlength="1" />
     </div>
-    <label>Gold answer (A–D, optional)</label>
-    <input id="gold" maxlength="1" />
+    <div id="freeform-fields" style="display:none">
+      <label>Reference answer (free-form — shown for visual comparison only)</label>
+      <textarea id="reference" readonly style="min-height: 90px; background:#0d1117"></textarea>
+    </div>
 
     <label style="margin-top:14px">Router</label>
     <select id="router">
@@ -120,8 +126,27 @@
 
     <div class="row" style="margin-top:14px">
       <button id="run">Send to cascade</button>
-      <button id="rand" class="secondary">Load random MedMCQA</button>
+      <select id="rand-dataset" style="max-width: 150px">
+        <option value="medmcqa">MedMCQA (easier MCQ)</option>
+        <option value="medqa">MedQA-USMLE (harder MCQ)</option>
+        <option value="medquad">MedQuAD (free-form)</option>
+      </select>
+      <button id="rand" class="secondary">Load random</button>
     </div>
+    <div class="row" style="margin-top:10px">
+      <button id="batch-run" class="secondary">Run batch</button>
+      <select id="batch-n" style="max-width:120px">
+        <option value="25">25 samples</option>
+        <option value="50" selected>50 samples</option>
+        <option value="100">100 samples</option>
+        <option value="200">200 samples</option>
+      </select>
+      <select id="batch-dataset" style="max-width:150px">
+        <option value="medmcqa">MedMCQA</option>
+        <option value="medqa">MedQA-USMLE</option>
+      </select>
+    </div>
+    <div id="batch-progress" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
     <div id="err" class="err"></div>
   </section>
 
@@ -193,15 +218,29 @@ const $ = (id) => document.getElementById(id);
 
 function buildMessages() {
   const q = $("q").value.trim();
-  const opts = ["opa","opb","opc","opd"].map(k => $(k).value.trim());
-  if (!q || opts.some(o => !o)) {
-    return null;
+  if (!q) return null;
+  const format = window.__currentFormat || "mcq";
+  if (format === "free_form") {
+    return [{
+      role: "user",
+      content:
+        "You are a careful medical expert answering a consumer health question. " +
+        "Be accurate and concise — 1-3 sentences.\n\nQuestion: " + q,
+    }];
   }
+  const opts = ["opa","opb","opc","opd"].map(k => $(k).value.trim());
+  if (opts.some(o => !o)) return null;
   const prompt = `You are a careful medical expert answering a multiple-choice question.\n\n` +
     `Question: ${q}\n` +
     `A) ${opts[0]}\nB) ${opts[1]}\nC) ${opts[2]}\nD) ${opts[3]}\n\n` +
     `Reply with a single letter (A, B, C, or D) and nothing else.`;
   return [{ role: "user", content: prompt }];
+}
+
+function setFormat(format) {
+  window.__currentFormat = format;
+  document.getElementById("mcq-fields").style.display = format === "mcq" ? "block" : "none";
+  document.getElementById("freeform-fields").style.display = format === "free_form" ? "block" : "none";
 }
 
 function renderExtras(router, extras) {
@@ -321,17 +360,25 @@ function render(body, router, ms) {
 
 async function loadRandom() {
   $("err").textContent = "";
+  const ds = document.getElementById("rand-dataset").value;
   try {
-    const r = await fetch("/v1/eval/sample");
+    const r = await fetch(`/v1/eval/sample?dataset=${encodeURIComponent(ds)}`);
     if (!r.ok) throw new Error(`sample endpoint returned ${r.status}`);
     const it = await r.json();
     $("q").value = it.question;
-    $("opa").value = it.options[0];
-    $("opb").value = it.options[1];
-    $("opc").value = it.options[2];
-    $("opd").value = it.options[3];
-    $("gold").value = it.answer;
     window.__lastSubject = it.subject;
+    if (it.format === "free_form") {
+      setFormat("free_form");
+      $("reference").value = it.reference_answer || "";
+      $("gold").value = "";
+    } else {
+      setFormat("mcq");
+      $("opa").value = it.options[0];
+      $("opb").value = it.options[1];
+      $("opc").value = it.options[2];
+      $("opd").value = it.options[3];
+      $("gold").value = it.answer;
+    }
   } catch (e) {
     $("err").textContent = String(e);
   }
@@ -389,8 +436,67 @@ async function refreshAudit() {
   }).join("");
 }
 
+async function runBatch() {
+  const btn = $("batch-run");
+  if (btn.dataset.running === "1") {
+    btn.dataset.running = "0";
+    btn.textContent = "Stopping…";
+    return;
+  }
+  const n = parseInt($("batch-n").value, 10);
+  const dataset = $("batch-dataset").value;
+  const router = $("router").value;
+  const progress = $("batch-progress");
+  btn.dataset.running = "1";
+  btn.textContent = "Stop";
+  $("err").textContent = "";
+  let correct = 0, escalated = 0, done = 0;
+  for (let i = 0; i < n; i++) {
+    if (btn.dataset.running !== "1") break;
+    progress.textContent =
+      `${i}/${n} — acc ${i?(correct/i*100).toFixed(0):0}%, escalated ${i?(escalated/i*100).toFixed(0):0}%`;
+    try {
+      const it = await (await fetch(`/v1/eval/sample?dataset=${dataset}`)).json();
+      const messages = [{role:"user", content:
+        `You are a careful medical expert answering a multiple-choice question.\n\n` +
+        `Question: ${it.question}\n` +
+        `A) ${it.options[0]}\nB) ${it.options[1]}\nC) ${it.options[2]}\nD) ${it.options[3]}\n\n` +
+        `Reply with a single letter (A, B, C, or D) and nothing else.`}];
+      const r = await fetch("/v1/chat/completions", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({messages, router}),
+      });
+      if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+      const body = await r.json();
+      const pred = (body.choices[0].message.content.match(/[A-D]/i)||[""])[0].toUpperCase();
+      const isCorrect = pred === (it.answer||"").toUpperCase();
+      if (isCorrect) correct++;
+      if (body.med_routing.escalated) escalated++;
+      done++;
+      await fetch("/v1/eval/observe", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          router, score: body.med_routing.score,
+          escalated: body.med_routing.escalated, correct: isCorrect,
+          subject: it.subject,
+        }),
+      });
+    } catch (e) {
+      $("err").textContent = `batch error at ${i+1}: ${e}`;
+      break;
+    }
+  }
+  progress.textContent = done
+    ? `done: ${done} samples, acc ${(correct/done*100).toFixed(1)}%, escalated ${(escalated/done*100).toFixed(1)}%`
+    : "";
+  btn.dataset.running = "0";
+  btn.textContent = "Run batch";
+  refreshAudit();
+}
+
 $("run").addEventListener("click", async () => { await run(); refreshAudit(); });
 $("rand").addEventListener("click", loadRandom);
+$("batch-run").addEventListener("click", runBatch);
 $("audit-toggle").addEventListener("click", () => {
   document.getElementById("audit").classList.toggle("open");
   refreshAudit();
