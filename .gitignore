@@ -14,11 +14,9 @@ venv/
 .ruff_cache/
 .mypy_cache/
 
-runs/
 *.jsonl
 
 .cache/
-data/
 hf_cache/
 
 .DS_Store

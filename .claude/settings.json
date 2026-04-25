@@ -60,7 +60,10 @@
       "Bash(curl -s 'http://localhost:8000/v1/audit/decisions?format=csv&limit=2')",
       "Bash(curl -s 'http://localhost:8000/v1/audit/eval?format=csv&limit=2')",
       "Bash(curl -s 'http://localhost:8000/v1/audit/decisions?router=self_consistency&limit=1')",
-      "Bash(python -c \"import sys,json; r=json.load\\(sys.stdin\\)[0]; print\\('router=',r['router'],'escalated=',r['escalated'],'cost=',r['cost_usd']\\)\")"
+      "Bash(python -c \"import sys,json; r=json.load\\(sys.stdin\\)[0]; print\\('router=',r['router'],'escalated=',r['escalated'],'cost=',r['cost_usd']\\)\")",
+      "Bash(curl -s 'http://localhost:8000/v1/audit/decisions.fhir?limit=1')",
+      "Bash(curl -s 'http://localhost:8000/v1/audit/decisions.fhir?limit=2&format=bundle')",
+      "Bash(python -c \"import sys,json; b=json.load\\(sys.stdin\\); print\\('resourceType:',b['resourceType'],'type:',b['type'],'total:',b['total']\\); print\\('first entry resourceType:',b['entry'][0]['resource']['resourceType'],'outcome:',b['entry'][0]['resource']['outcomeDesc']\\)\")"
     ]
   }
 }
