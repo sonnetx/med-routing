@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -12,15 +14,28 @@
       "type": "row",
       "title": "Routing behavior",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "panels": []
     },
     {
       "id": 2,
       "type": "gauge",
       "title": "Escalation rate per router",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "medr_escalation_rate",
@@ -37,62 +52,86 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.4 },
-              { "color": "red", "value": 0.7 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.4
+              },
+              {
+                "color": "red",
+                "value": 0.7
+              }
             ]
           }
         },
         "overrides": []
       },
-      "options": { "showThresholdMarkers": true, "showThresholdLabels": false }
+      "options": {
+        "showThresholdMarkers": true,
+        "showThresholdLabels": false
+      }
     },
     {
       "id": 8,
       "type": "barchart",
-      "title": "Routing decisions per router (kept-weak vs escalated)",
-      "description": "Per router: how many questions were answered by the weak model alone vs escalated to the strong model. Stacked counts.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "title": "Cost per router (USD)",
+      "description": "Total dollars spent per router (replays + live traffic / eval pushes). Lower is better when accuracy is held constant.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "expr": "sum by (router) (medr_requests_total{escalated=\"false\"})",
-          "legendFormat": "kept-weak",
+          "expr": "sum by (router) (medr_actual_cost_usd_total)",
           "refId": "A",
           "instant": true,
-          "format": "time_series"
-        },
+          "format": "table"
+        }
+      ],
+      "transformations": [
         {
-          "expr": "sum by (router) (medr_requests_total{escalated=\"true\"})",
-          "legendFormat": "escalated",
-          "refId": "B",
-          "instant": true,
-          "format": "time_series"
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "custom": { "stacking": { "mode": "normal", "group": "A" } }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "kept-weak" },
-            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "escalated" },
-            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          "unit": "currencyUSD",
+          "decimals": 5,
+          "color": {
+            "mode": "palette-classic"
           }
-        ]
+        },
+        "overrides": []
       },
       "options": {
         "orientation": "vertical",
         "showValue": "auto",
-        "stacking": "normal",
+        "stacking": "none",
         "groupWidth": 0.7,
         "barWidth": 0.9,
-        "xTickLabelRotation": 0
+        "xTickLabelRotation": -20,
+        "xField": "router",
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
@@ -100,15 +139,28 @@
       "type": "row",
       "title": "Calibration",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
       "panels": []
     },
     {
       "id": 5,
       "type": "stat",
       "title": "Rolling accuracy by router",
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 10 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "medr_accuracy",
@@ -125,16 +177,31 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "green", "value": 0.7 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 0.7
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "graphMode": "area",
         "colorMode": "value"
       }
@@ -144,8 +211,16 @@
       "type": "stat",
       "title": "Expected calibration error",
       "description": "Lower is better. ECE = sum_b (n_b/N) * |(1 - bin_midpoint) - bin_accuracy|. Single-number summary of the reliability diagram below.",
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 10 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "medr_ece",
@@ -163,16 +238,31 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.1 },
-              { "color": "red", "value": 0.2 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.2
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "graphMode": "none",
         "colorMode": "value",
         "textMode": "value_and_name"
@@ -183,19 +273,43 @@
       "type": "barchart",
       "title": "Reliability diagram (weak-model accuracy by uncertainty bin)",
       "description": "For each uncertainty bin, fraction of weak answers that were correct. Well-calibrated = high accuracy in low-uncertainty bins, low accuracy in high-uncertainty bins.",
-      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 7,
+        "w": 16,
+        "x": 0,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "medr_calibration_bin_correct_total / clamp_min(medr_calibration_bin_total, 1)",
-          "legendFormat": "{{router}} / {{bin}}",
           "refId": "A",
           "instant": true,
-          "format": "time_series"
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "router",
+            "rowField": "bin",
+            "valueField": "Value"
+          }
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
         "overrides": []
       },
       "options": {
@@ -204,51 +318,148 @@
         "showValue": "auto",
         "stacking": "none",
         "groupWidth": 0.7,
-        "barWidth": 0.9
+        "barWidth": 0.9,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
       "id": 11,
-      "type": "bargauge",
+      "type": "barchart",
       "title": "Selective accuracy: kept-weak vs escalated",
-      "description": "Did the router escalate the right questions? We want kept-weak HIGH (router was right to keep them) and escalated > kept-weak (strong model was actually needed).",
-      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "For each router, accuracy on questions the router KEPT (left to weak) vs questions it ESCALATED (sent to strong). Want kept-weak high (correctly held back) and escalated > kept-weak (escalations were warranted).",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 16
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "medr_kept_weak_accuracy",
-          "legendFormat": "kept-weak / {{router}}",
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "format": "table"
         },
         {
           "expr": "medr_escalated_accuracy",
-          "legendFormat": "escalated / {{router}}",
           "refId": "B",
-          "instant": true
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "router",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time 1": true,
+              "Time 2": true
+            },
+            "renameByName": {
+              "Value #A": "kept-weak",
+              "Value #B": "escalated"
+            },
+            "indexByName": {}
+          }
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
-        "overrides": []
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "kept-weak"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "escalated"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
-      "options": { "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true }
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "stacking": "none",
+        "groupWidth": 0.7,
+        "barWidth": 0.9,
+        "xTickLabelRotation": -30,
+        "xField": "router",
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
     },
     {
       "id": 102,
       "type": "row",
       "title": "Economics",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
       "panels": []
     },
     {
       "id": 13,
       "type": "stat",
-      "title": "💰 Total savings vs all-strong baseline",
+      "title": "\ud83d\udcb0 Total savings vs all-strong baseline",
       "description": "How much we saved by routing some queries to the weak model instead of sending every query to GPT-4o.",
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 26 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "sum(medr_counterfactual_cost_usd_total) - sum(medr_actual_cost_usd_total)",
@@ -264,16 +475,31 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0 },
-              { "color": "green", "value": 0.001 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 0.001
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "graphMode": "area",
         "colorMode": "value",
         "textMode": "value"
@@ -284,8 +510,16 @@
       "type": "stat",
       "title": "Savings rate per router",
       "description": "Fraction of all-strong cost saved by routing through this uncertainty router. 1.0 = always weak; 0 = always strong.",
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 26 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
           "expr": "1 - (medr_actual_cost_usd_total / clamp_min(medr_counterfactual_cost_usd_total, 0.0000001))",
@@ -302,16 +536,31 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "green", "value": 0.8 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 0.8
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "graphMode": "none",
         "colorMode": "value",
         "textMode": "value_and_name"
@@ -322,15 +571,28 @@
       "type": "row",
       "title": "Residency / GDPR (collapsed by default)",
       "collapsed": true,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
       "panels": [
         {
           "id": 16,
           "type": "piechart",
-          "title": "🌍 Data residency: calls by region",
+          "title": "\ud83c\udf0d Data residency: calls by region",
           "description": "Where the data physically went. GDPR Art. 30 + Art. 46 evidence.",
-          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 33 },
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 31
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "targets": [
             {
               "expr": "sum by (region) (medr_processor_calls_total)",
@@ -341,18 +603,40 @@
           ],
           "options": {
             "pieType": "donut",
-            "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
-            "displayLabels": ["percent"]
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "values": [
+                "value",
+                "percent"
+              ]
+            },
+            "displayLabels": [
+              "percent"
+            ]
           },
-          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          }
         },
         {
           "id": 17,
           "type": "barchart",
           "title": "Processor breakdown",
           "description": "Calls per legal processor (data controller).",
-          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 33 },
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 31
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "targets": [
             {
               "expr": "sum by (processor, entity) (medr_processor_calls_total)",
@@ -367,19 +651,32 @@
             "showValue": "auto",
             "stacking": "none"
           },
-          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short"
+            },
+            "overrides": []
+          }
         },
         {
           "id": 18,
           "type": "stat",
-          "title": "🚨 Cross-border egress events",
+          "title": "\ud83d\udea8 Cross-border egress events",
           "description": "Requests where data left the configured HOME_REGION. Stays at 0 until you configure a non-US processor.",
-          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 33 },
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 31
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "targets": [
             {
               "expr": "sum by (router, foreign_region) (medr_cross_border_total)",
-              "legendFormat": "{{router}} → {{foreign_region}}",
+              "legendFormat": "{{router}} \u2192 {{foreign_region}}",
               "refId": "A",
               "instant": true
             }
@@ -390,16 +687,31 @@
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
-                  { "color": "green", "value": null },
-                  { "color": "yellow", "value": 1 },
-                  { "color": "red", "value": 100 }
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 100
+                  }
                 ]
               }
             },
             "overrides": []
           },
           "options": {
-            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
             "graphMode": "none",
             "colorMode": "value",
             "textMode": "value_and_name"
@@ -410,13 +722,23 @@
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["med-routing", "llm", "uncertainty", "eval"],
-  "templating": { "list": [] },
-  "time": { "from": "now-30m", "to": "now" },
+  "tags": [
+    "med-routing",
+    "llm",
+    "uncertainty",
+    "eval"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "",
-  "title": "med-routing — Eval Dashboard",
+  "title": "med-routing \u2014 Eval Dashboard",
   "uid": "med-routing-eval",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
