@@ -34,9 +34,13 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/med_routing.json
+      - GF_INSTALL_PLUGINS=frser-sqlite-datasource
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      # Read-only mount so Grafana can query the audit DB without ever
+      # writing to it. The med-routing container is the only writer.
+      - ./data:/var/lib/grafana-data:ro
     depends_on:
       - prometheus
 
