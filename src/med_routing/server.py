@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import random
 import time
 import uuid
@@ -8,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -31,12 +32,14 @@ from .datasets import (
     run_eval_sweep,
 )
 from .eval.aggregator import EvalAggregator
+from .eval.scoring import score_freeform_with_judge
 from .feedback import recommend_for_all
 from .fhir import decision_to_audit_event, to_bundle
 from .llm.openai_client import OpenAIClient
 from .metrics import ACCURACY, REGISTRY
 from .routers.registry import KNOWN_ROUTERS, build_routers
 from .store import DECISION_COLS, EVAL_COLS, Store, iter_csv
+from .streaming_cascade import StreamingCascade
 
 
 class ChatMessage(BaseModel):
@@ -81,6 +84,7 @@ async def lifespan(app: FastAPI):
         set_runtime_threshold(router_name, thr)
     audit = AuditLogger(root=Path(s.audit_dir), store=store)
     app.state.controller = CascadeController(client=client, routers=routers, cache=cache, audit=audit)
+    app.state.streaming = StreamingCascade(client=client, routers=routers, cache=cache, audit=audit)
     app.state.routers = routers
     aggregator = EvalAggregator(store=store)
     app.state.aggregator = aggregator
@@ -368,47 +372,119 @@ async def push_observation(payload: Observation, request: Request) -> dict[str, 
     return {"ok": True, **summary}
 
 
-class CompareRequest(BaseModel):
-    messages: list[ChatMessage]
-    routers: list[str] | None = Field(default=None, description="Subset of routers; default = all registered.")
-
-
-@app.post("/v1/compare")
-async def compare_routers(req: CompareRequest) -> JSONResponse:
-    """Fan-out one prompt to multiple routers in parallel and return each
-    router's decision side-by-side. The cascade's weak-call cache ensures we
-    pay for the weak inference once even though every router uses it."""
-    import asyncio
-    import time as _time
-
-    available = sorted(app.state.routers.keys())
-    chosen = req.routers or available
-    unknown = [r for r in chosen if r not in app.state.routers]
-    if unknown:
-        raise HTTPException(404, f"Unknown routers: {unknown}; available: {available}")
-
-    controller: CascadeController = app.state.controller
-    messages = [m.model_dump() for m in req.messages]
-
-    async def one(router_name: str) -> dict[str, Any]:
-        t0 = _time.perf_counter()
-        try:
-            res = await controller.handle(messages, router_name)
-        except Exception as exc:  # surface per-router failures without aborting the whole compare
-            return {"router": router_name, "error": str(exc)}
-        return {
-            "router": router_name,
-            "score": res.score,
-            "threshold": res.threshold,
-            "escalated": res.escalated,
-            "model_used": res.model_used,
-            "text": res.text,
-            "latency_ms": int((_time.perf_counter() - t0) * 1000),
-            "extras": res.extras,
+@app.get("/v1/tiers")
+async def list_tiers() -> list[dict[str, Any]]:
+    """The 3-tier cascade spec — model + USD/1M token pricing per tier."""
+    s = get_settings()
+    return [
+        {
+            "index": i,
+            "name": t.name,
+            "model": t.model,
+            "input_per_m": t.prompt_per_m,
+            "output_per_m": t.completion_per_m,
         }
+        for i, t in enumerate(s.tiers)
+    ]
 
-    results = await asyncio.gather(*(one(r) for r in chosen))
-    return JSONResponse(content={"prompt_sha": None, "results": results})
+
+# Display labels + colour hints for the grid UI. Keep in sync with the CSS
+# variables in static/index.html (--m-self_reported etc.).
+_METRIC_LABELS = {
+    "self_reported": "self-reported",
+    "self_consistency": "self-consistency",
+    "predictive_entropy": "predictive entropy",
+    "semantic_entropy_embed": "semantic entropy (embed)",
+    "semantic_entropy": "semantic entropy (NLI)",
+}
+
+
+@app.get("/v1/metrics-meta")
+async def metrics_meta() -> list[dict[str, Any]]:
+    """Per-router display metadata + effective threshold.
+
+    Drives the rows of the grid UI on `/`. Excludes the `auto` meta-router and
+    optional gated ones (routellm/learned) when not registered.
+    """
+    s = get_settings()
+    visible_order = (
+        "self_reported",
+        "self_consistency",
+        "predictive_entropy",
+        "semantic_entropy_embed",
+        "semantic_entropy",
+    )
+    return [
+        {"name": name, "label": _METRIC_LABELS.get(name, name), "threshold": s.threshold_for(name)}
+        for name in visible_order
+        if name in app.state.routers
+    ]
+
+
+class JudgeRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=4000)
+    reference: str = Field(..., min_length=1, max_length=8000)
+    predicted: str = Field(..., min_length=1, max_length=16000)
+
+
+@app.post("/v1/judge")
+async def judge_endpoint(req: JudgeRequest) -> dict[str, Any]:
+    """LLM-as-judge: grade a predicted answer against a reference.
+
+    Used by the `/` UI to score each tier's answer once it's committed, so the
+    user sees CORRECT/WRONG next to each metric's final answer cell.
+    """
+    s = get_settings()
+    correct = await score_freeform_with_judge(
+        question=req.question,
+        predicted=req.predicted,
+        reference=req.reference,
+        judge_client=app.state.openai_client,
+        judge_model=s.judge_model,
+    )
+    return {"correct": bool(correct), "judge_model": s.judge_model}
+
+
+class RunRequest(BaseModel):
+    messages: list[ChatMessage]
+    metrics: list[str] | None = Field(
+        default=None,
+        description="Subset of routers to grid over; default = all registered (excluding `auto`).",
+    )
+
+
+def _sse_frame(event: dict[str, Any]) -> bytes:
+    """Format an SSE event matching the cascading_demo wire format:
+
+        event: <type>\ndata: <json>\n\n
+    """
+    typ = event.get("type", "message")
+    payload = json.dumps(event, default=str)
+    return f"event: {typ}\ndata: {payload}\n\n".encode("utf-8")
+
+
+@app.post("/v1/run")
+async def run_stream(req: RunRequest) -> StreamingResponse:
+    """SSE stream of multi-metric grid cascade events."""
+    streaming: StreamingCascade = app.state.streaming
+    messages = [m.model_dump() for m in req.messages]
+    chosen = req.metrics
+    if chosen:
+        unknown = [m for m in chosen if m not in app.state.routers]
+        if unknown:
+            raise HTTPException(
+                404,
+                f"Unknown metrics: {unknown}; available: {sorted(app.state.routers)}",
+            )
+
+    async def gen():
+        try:
+            async for event in streaming.stream(messages, metrics=chosen):
+                yield _sse_frame(event)
+        except Exception as exc:
+            yield _sse_frame({"type": "error", "message": str(exc)})
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 # ---------- Company-facing dataset workflow ----------
@@ -613,8 +689,18 @@ async def chat_completions(req: ChatCompletionRequest, request: Request) -> JSON
             "score": result.score,
             "threshold": result.threshold,
             "escalated": result.escalated,
-            "weak_model": result.weak_completion.model,
-            "strong_model": result.strong_completion.model if result.strong_completion else None,
+            "final_tier_index": result.final_tier_index,
+            "tier_chain": [
+                {
+                    "tier_index": v.tier_index,
+                    "tier_name": v.tier_name,
+                    "model": v.model,
+                    "score": v.score,
+                    "threshold": v.threshold,
+                    "escalated": v.escalated,
+                }
+                for v in result.visits
+            ],
             "extras": result.extras,
         },
     }
