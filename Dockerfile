@@ -25,4 +25,8 @@ RUN pip install --upgrade pip && pip install -e "."
 
 EXPOSE 8000
 
-CMD ["python", "-m", "med_routing.server"]
+# Start uvicorn directly. Going through `python -m med_routing.server` →
+# uvicorn.run("med_routing.server:app") double-imports the module (once as
+# __main__, once as med_routing.server), which can desync the FastAPI app's
+# route registry from what tests expect.
+CMD ["uvicorn", "med_routing.server:app", "--host", "0.0.0.0", "--port", "8000"]

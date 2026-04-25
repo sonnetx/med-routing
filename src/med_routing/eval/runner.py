@@ -98,11 +98,15 @@ async def _run(args: argparse.Namespace) -> int:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 f.flush()
 
+                # If `auto` was requested, attribute the eval observation to
+                # whichever sub-router actually scored — auto is a meta-router
+                # and should never appear as its own series.
+                effective_router = (meta.get("extras") or {}).get("auto_router") or args.router
                 try:
                     await client.post(
                         f"{args.base_url}/v1/eval/observe",
                         json={
-                            "router": args.router,
+                            "router": effective_router,
                             "score": float(meta.get("score") or 0.0),
                             "escalated": bool(meta.get("escalated")),
                             "correct": ok,

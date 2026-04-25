@@ -2,221 +2,120 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>med-routing · 4 uncertainty metrics × 3 tiers</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>med-routing — interactive cascade demo</title>
 <style>
   :root {
-    --bg: #0b0d12;
-    --panel: #141821;
-    --panel-2: #1b2030;
-    --border: #2a3142;
-    --text: #e5e9f0;
-    --muted: #8a93a6;
-    --accent: #4f9dff;
-    --good: #3ddc84;
-    --warn: #ffb454;
-    --bad: #ff6b6b;
-    --pulse: #4f9dff66;
-    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-
-    --m-self_reported:          #6aa9ff;
-    --m-self_consistency:       #f0a868;
-    --m-predictive_entropy:     #b691f0;
-    --m-semantic_entropy_embed: #5fc4a4;
-    --m-semantic_entropy:       #ec8aa6;
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #c9d1d9;
+    --muted: #8b949e; --accent: #58a6ff; --weak: #3fb950; --strong: #f85149;
+    --warn: #d29922;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 0; background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  }
-  header {
-    padding: 14px 24px; border-bottom: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: baseline;
-  }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex;
+           justify-content: space-between; align-items: baseline; }
   header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  header .links a { color: var(--muted); text-decoration: none; margin-left: 14px; font-size: 13px; }
+  header .links a { color: var(--muted); text-decoration: none; margin-left: 14px; }
   header .links a:hover { color: var(--accent); }
-  main { padding: 20px 24px 32px; max-width: 1500px; margin: 0 auto; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; line-height: 1.5; }
-  .row { display: flex; gap: 12px; align-items: stretch; }
-  .input-row { margin-bottom: 12px; }
-  textarea {
-    flex: 1; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--panel); color: var(--text); font-size: 14px; min-height: 56px; resize: vertical;
-    font-family: inherit;
-  }
-  select {
-    padding: 0 12px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--panel); color: var(--text); font-size: 13px; font-family: inherit;
-  }
-  button {
-    padding: 0 20px; border-radius: 8px; border: 0; background: var(--accent); color: white;
-    font-weight: 600; cursor: pointer; font-size: 14px;
-  }
-  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-  .ex {
-    background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
-    padding: 4px 10px; border-radius: 999px; font-size: 12px; cursor: pointer;
-  }
-  .ex:hover { color: var(--text); border-color: var(--accent); }
-
-  .toolbar {
-    display: flex; gap: 8px; align-items: center; margin: 6px 0 18px; flex-wrap: wrap;
-    color: var(--muted); font-size: 12px;
-  }
-  .toolbar select, .toolbar button { font-size: 12px; padding: 6px 12px; }
-
-  .tier-header {
-    display: grid; gap: 10px;
-    grid-template-columns: 220px repeat(3, 1fr);
-    margin-bottom: 8px;
-  }
-  .tier-header .col-label {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 12px; font-size: 12px;
-  }
-  .tier-header .col-label.spacer { background: transparent; border: 0; }
-  .tier-header .col-label .name { font-weight: 600; font-size: 13px; }
-  .tier-header .col-label .pricing { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
-
-  .metric-row {
-    display: grid; gap: 10px;
-    grid-template-columns: 220px repeat(3, 1fr);
-    margin-bottom: 10px;
-  }
-  .metric-label {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    padding: 12px 12px 12px 14px; font-size: 12px;
-    border-left: 3px solid var(--accent-color, var(--border));
-  }
-  .metric-label .mname { font-weight: 600; font-size: 13px; color: var(--accent-color, var(--text)); }
-  .metric-label .mthr { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .metric-label .mdesc { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
-
-  .cell {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 12px; min-height: 92px; position: relative; transition: all 0.25s ease;
-    display: flex; flex-direction: column; gap: 6px;
-    border-top: 2px solid color-mix(in srgb, var(--accent-color, var(--border)) 50%, transparent);
-  }
-  .cell .status { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; min-height: 12px; }
-  .cell .score { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--text); }
-  .cell .score .threshold-tag { font-family: var(--mono); font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
-  .cell .verdict-mark { font-size: 11px; padding: 2px 6px; border-radius: 4px; align-self: flex-start; font-weight: 600; }
-  .cell .verdict-mark.commit { background: #3ddc8422; color: var(--good); }
-  .cell .verdict-mark.escalate { background: #ffb45422; color: var(--warn); }
-  .cell .extras { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: auto; line-height: 1.3; }
-
-  .cell.idle { opacity: 0.45; }
-  .cell.pending { border-color: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
-  .cell.commit-cell { border-color: var(--good); box-shadow: 0 0 8px #3ddc8422; }
-  .cell.escalate-cell { border-color: var(--warn); }
-  .cell.skipped { opacity: 0.3; }
-  .cell.errored { border-color: var(--bad); }
-
-  @keyframes pulse {
-    0%   { box-shadow: 0 0 0 0   var(--pulse); }
-    70%  { box-shadow: 0 0 0 8px transparent; }
-    100% { box-shadow: 0 0 0 0   transparent; }
-  }
-
-  .finals { margin-top: 18px; display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
-  .final-card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
-    border-left: 3px solid var(--accent-color, var(--border));
-  }
-  .final-card .ftitle { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .final-card .ftitle .fname { font-weight: 600; font-size: 13px; color: var(--accent-color, var(--text)); }
-  .final-card .ftitle .ftier {
-    font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px;
-    background: var(--panel-2); color: var(--muted);
-  }
-  .final-card .ftitle .ftier.committed { background: #3ddc8422; color: var(--good); }
-  .final-card .fanswer { font-size: 12px; line-height: 1.5; white-space: pre-wrap; max-height: 180px; overflow: auto; color: var(--text); }
-  .final-card .fjudge { color: var(--muted); font-size: 11px; margin-top: 8px; line-height: 1.4; font-style: italic; min-height: 14px; }
-  .verdict { font-size: 10px; padding: 2px 6px; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-  .verdict.judging { background: var(--panel-2); color: var(--muted); animation: pulse 1.4s ease-in-out infinite; }
-  .verdict.correct { background: #3ddc8422; color: var(--good); }
-  .verdict.incorrect { background: #ff6b6b22; color: var(--bad); }
-  .verdict.no-gold  { background: var(--panel-2); color: var(--muted); }
-
-  .gold-panel {
-    background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--good);
-    border-radius: 8px; padding: 12px 14px; margin: 12px 0 16px;
-  }
-  .gold-panel.hidden { display: none; }
-  .gold-panel .ghdr { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .gold-panel .glabel { font-size: 11px; color: var(--good); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
-  .gold-panel .gnote { font-size: 11px; color: var(--muted); }
-  .gold-panel .gtext { font-size: 13px; line-height: 1.55; color: var(--text); white-space: pre-wrap; max-height: 200px; overflow: auto; }
-
-  .shared-row {
-    display: grid; gap: 10px;
-    grid-template-columns: 220px repeat(3, 1fr);
-    margin-bottom: 14px;
-  }
-  .shared-row .col-info {
-    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 8px 12px; font-family: var(--mono); font-size: 10px; color: var(--muted);
-    line-height: 1.5;
-  }
-  .shared-row .col-info.spacer { background: transparent; border: 0; }
-  .shared-row .col-info .lbl { color: var(--muted); display: inline; }
-  .shared-row .col-info .v { color: var(--text); display: inline; }
-  .shared-row .col-info .line { display: block; }
-
-  .totals { display: flex; gap: 16px; margin-top: 18px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; flex-wrap: wrap; }
-  .totals .stat { display: flex; flex-direction: column; gap: 2px; }
-  .totals .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-  .totals .stat .v { font-family: var(--mono); font-size: 14px; color: var(--text); font-weight: 600; }
-
-  .section { margin-top: 28px; }
-  .section h2 {
-    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
-    color: var(--muted); margin: 0 0 12px 0;
-  }
-  details > summary {
-    cursor: pointer; user-select: none; padding: 8px 0; color: var(--text);
-    list-style: none;
-  }
-  details > summary::-webkit-details-marker { display: none; }
-  details > summary::before {
-    content: "\25B6"; color: var(--muted); margin-right: 8px;
-    display: inline-block; transition: transform 0.15s;
-  }
-  details[open] > summary::before { transform: rotate(90deg); }
-
-  .batch-panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
-  .batch-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .progress-bar { position: relative; height: 6px; background: var(--panel-2);
-                  border: 1px solid var(--border); border-radius: 3px; overflow: hidden;
-                  margin-top: 10px; }
-  .progress-bar > div { position: absolute; top: 0; bottom: 0; left: 0;
-                        background: var(--accent); transition: width 0.2s ease; }
-
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; display: grid;
+         grid-template-columns: 1fr 1fr; gap: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+           padding: 16px; }
+  .panel h2 { font-size: 13px; font-weight: 600; text-transform: uppercase;
+              letter-spacing: 0.05em; color: var(--muted); margin: 0 0 12px 0; }
+  textarea, input, select { width: 100%; background: #0d1117; color: var(--text);
+              border: 1px solid var(--line); border-radius: 4px; padding: 8px;
+              font: inherit; }
+  textarea { resize: vertical; min-height: 70px; }
+  label { display: block; margin: 10px 0 4px 0; font-size: 12px; color: var(--muted); }
+  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .row { display: flex; gap: 10px; align-items: end; }
+  .row > * { flex: 1; }
+  button { background: var(--accent); color: #0d1117; border: 0; border-radius: 4px;
+           padding: 10px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent);
+                     border: 1px solid var(--line); }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+           font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .badge.weak { background: rgba(63,185,80,0.15); color: var(--weak); }
+  .badge.strong { background: rgba(248,81,73,0.18); color: var(--strong); }
+  .answer { font-size: 36px; font-weight: 700; }
+  .answer.correct { color: var(--weak); }
+  .answer.wrong { color: var(--strong); }
+  .meta { display: grid; grid-template-columns: max-content 1fr; row-gap: 6px;
+          column-gap: 10px; font-size: 13px; }
+  .meta .k { color: var(--muted); }
+  .bar { height: 8px; background: #0d1117; border-radius: 4px; overflow: hidden;
+         margin: 4px 0 10px 0; border: 1px solid var(--line); }
+  .bar > div { height: 100%; background: linear-gradient(90deg, var(--weak), var(--warn), var(--strong)); }
+  .threshold { position: relative; height: 0; }
+  .threshold::after { content: ""; position: absolute; top: -10px; width: 1px; height: 12px;
+                      background: var(--accent); }
+  pre { background: #0d1117; border: 1px solid var(--line); border-radius: 4px;
+        padding: 10px; font-size: 12px; overflow-x: auto; max-height: 240px; }
+  .audit { max-width: 1100px; margin: 0 auto 24px; padding: 0 20px; }
+  .audit-head { display: flex; align-items: center; gap: 10px; cursor: pointer;
+                user-select: none; padding: 8px 0; }
+  .audit-head .caret { color: var(--muted); transition: transform 0.15s; }
+  .audit.open .audit-head .caret { transform: rotate(90deg); }
+  .audit-body { display: none; background: var(--panel); border: 1px solid var(--line);
+                border-radius: 6px; padding: 0; overflow: hidden; }
+  .audit.open .audit-body { display: block; }
   table.audit-table { width: 100%; border-collapse: collapse; font-size: 12px;
-                      font-family: var(--mono); background: var(--panel);
-                      border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  table.audit-table th { text-align: left; padding: 8px 10px; background: var(--panel-2);
-                         border-bottom: 1px solid var(--border); color: var(--muted);
+                      font-family: ui-monospace, Consolas, monospace; }
+  table.audit-table th { text-align: left; padding: 8px 10px; background: #0d1117;
+                         border-bottom: 1px solid var(--line); color: var(--muted);
                          font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-  table.audit-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  table.audit-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); }
   table.audit-table tr:last-child td { border-bottom: none; }
   table.audit-table tr.cross-border td { background: rgba(248,81,73,0.08); }
   .region-pill { display: inline-block; padding: 1px 6px; border-radius: 3px;
-                 background: rgba(63,185,80,0.15); color: var(--good); font-size: 11px; }
-  .region-pill.foreign { background: rgba(248,81,73,0.18); color: var(--bad); }
+                 background: rgba(63,185,80,0.15); color: var(--weak); font-size: 11px; }
+  .region-pill.foreign { background: rgba(248,81,73,0.18); color: var(--strong); }
   .audit-empty { padding: 20px; color: var(--muted); text-align: center; font-size: 12px; }
-  .err { color: var(--bad); font-size: 12px; margin-top: 8px; }
+  .audit-meta { color: var(--muted); font-size: 12px; }
+  .extras-grid { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; }
+  .extras-grid .k { color: var(--muted); }
+  .pill-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .pill { padding: 2px 6px; background: #21262d; border-radius: 3px; font-size: 12px;
+          font-family: ui-monospace, Consolas, monospace; }
+  .pill.match { background: rgba(63,185,80,0.2); color: var(--weak); }
+  .gold { color: var(--weak); font-weight: 600; }
+  .err { color: var(--strong); font-size: 12px; margin-top: 8px; }
+  /* batch progress bar */
+  .progress-bar { position: relative; height: 6px; background: #0d1117;
+                  border: 1px solid var(--line); border-radius: 3px; overflow: hidden;
+                  margin-top: 6px; }
+  .progress-bar > div { position: absolute; top: 0; bottom: 0; left: 0;
+                        background: var(--accent); transition: width 0.2s ease; }
+  /* compare grid */
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+                  margin-top: 12px; }
+  .compare-card { background: #0d1117; border: 1px solid var(--line);
+                  border-radius: 4px; padding: 10px; }
+  .compare-card .name { font-size: 12px; color: var(--muted);
+                        text-transform: uppercase; letter-spacing: 0.05em;
+                        font-weight: 600; }
+  .compare-card .answer-row { display: flex; align-items: center; gap: 8px;
+                              margin-top: 4px; }
+  .compare-card .answer-row .a { font-size: 22px; font-weight: 700; min-width: 22px; }
+  .compare-card .meta-line { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .compare-card .text-preview { font-size: 12px; color: var(--text); margin-top: 6px;
+                                max-height: 60px; overflow: hidden; line-height: 1.4; }
+  /* retune dialog */
+  .retune-card { display: grid; grid-template-columns: max-content 1fr max-content;
+                 gap: 8px 12px; align-items: center; padding: 8px 0;
+                 border-bottom: 1px solid var(--line); font-size: 13px; }
+  .retune-card:last-child { border-bottom: none; }
+  .retune-card .arrow { color: var(--muted); }
+  .retune-skipped { color: var(--muted); font-size: 12px; padding: 6px 0; }
 </style>
 </head>
 <body>
-
 <header>
-  <h1>med-routing &middot; cascade demo</h1>
+  <h1>med-routing — interactive cascade demo</h1>
   <div class="links">
     <a href="/datasets">Evaluate on your data</a>
     <a href="/docs" target="_blank">API docs</a>
@@ -226,665 +125,607 @@
 </header>
 
 <main>
-  <div class="sub">
-    same prompt, same tiers (nano &rarr; mini &rarr; base) &mdash; four DIFFERENT uncertainty metrics decide when to escalate.
-    rows = metric, columns = tier. shared per-tier work (1 main answer + N samples + logprobs) feeds all four scores.
-    free-form medical Q&amp;A; LLM-as-judge grades each row's committed answer against a reference when available.
-  </div>
-
-  <div class="row input-row">
-    <textarea id="prompt" placeholder="ask anything&hellip;">What is the antidote for an opioid overdose with respiratory depression?</textarea>
-    <button id="go">run cascade</button>
-  </div>
-  <div class="examples" id="examples"></div>
-
-  <div class="toolbar">
-    <span>load random:</span>
-    <select id="rand-dataset">
-      <option value="medquad" selected>MedQuAD (consumer health, free-form)</option>
-      <option value="medqa">MedQA-USMLE (clinical, w/ options)</option>
-      <option value="medmcqa">MedMCQA (w/ options)</option>
-    </select>
-    <button id="rand" class="secondary">Load random</button>
-    <span style="margin-left:auto;color:var(--muted)">tip: &#8984;/ctrl+enter to run</span>
-  </div>
-
-  <div class="gold-panel hidden" id="gold-panel">
-    <div class="ghdr">
-      <span class="glabel">reference answer</span>
-      <span class="gnote">&mdash; LLM-judge compares each row's committed answer against THIS, not the judge's own knowledge</span>
+  <section class="panel">
+    <h2>question</h2>
+    <label for="q">Question</label>
+    <textarea id="q" placeholder="Type or load a random question..."></textarea>
+    <div id="mcq-fields">
+      <div class="options">
+        <div><label>A</label><input id="opa" /></div>
+        <div><label>B</label><input id="opb" /></div>
+        <div><label>C</label><input id="opc" /></div>
+        <div><label>D</label><input id="opd" /></div>
+      </div>
+      <label>Gold answer (A–D, optional)</label>
+      <input id="gold" maxlength="1" />
     </div>
-    <div class="gtext" id="gold-text"></div>
-  </div>
+    <div id="freeform-fields" style="display:none">
+      <label>Reference answer (free-form — shown for visual comparison only)</label>
+      <textarea id="reference" readonly style="min-height: 90px; background:#0d1117"></textarea>
+    </div>
 
-  <div class="tier-header" id="tier-header"></div>
-  <div class="shared-row" id="shared-row"></div>
-  <div id="grid"></div>
+    <label style="margin-top:14px">Router</label>
+    <select id="router">
+      <option value="auto" selected>auto (picks per-format)</option>
+      <option value="self_consistency">self_consistency</option>
+      <option value="self_reported">self_reported</option>
+      <option value="predictive_entropy">predictive_entropy</option>
+      <option value="semantic_entropy">semantic_entropy</option>
+    </select>
 
-  <div class="finals" id="finals"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="run">Send to cascade</button>
+      <select id="rand-dataset" style="max-width: 150px">
+        <option value="medmcqa">MedMCQA (easier MCQ)</option>
+        <option value="medqa">MedQA-USMLE (harder MCQ)</option>
+        <option value="medquad">MedQuAD (free-form)</option>
+      </select>
+      <button id="rand" class="secondary">Load random</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="batch-run" class="secondary">Run batch</button>
+      <select id="batch-n" style="max-width:120px">
+        <option value="25">25 samples</option>
+        <option value="50" selected>50 samples</option>
+        <option value="100">100 samples</option>
+        <option value="200">200 samples</option>
+      </select>
+      <select id="batch-dataset" style="max-width:150px">
+        <option value="medmcqa">MedMCQA</option>
+        <option value="medqa">MedQA-USMLE</option>
+        <option value="medquad">MedQuAD (free-form)</option>
+      </select>
+    </div>
+    <div class="progress-bar" id="batch-bar" style="display:none"><div></div></div>
+    <div id="batch-progress" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="compare-run" class="secondary">Compare all routers</button>
+      <button id="retune-open" class="secondary">Retune routers</button>
+    </div>
+    <div id="err" class="err"></div>
+  </section>
 
-  <div class="totals">
-    <div class="stat"><span class="lbl">total cost (all metrics + shared)</span><span class="v" id="t-cost">&mdash;</span></div>
-    <div class="stat"><span class="lbl">always-base cost (no cascade)</span><span class="v" id="t-base">&mdash;</span></div>
-    <div class="stat"><span class="lbl">savings vs always-base</span><span class="v" id="t-sav">&mdash;</span></div>
-    <div class="stat"><span class="lbl">latency</span><span class="v" id="t-lat">&mdash;</span></div>
-  </div>
-
-  <div id="err" class="err"></div>
-
-  <div class="section">
-    <details>
-      <summary><strong>Batch run</strong> <span style="color:var(--muted);font-size:12px">&mdash; sweep N random questions through the full grid; reports cumulative cost &amp; tier distribution.</span></summary>
-      <div class="batch-panel" style="margin-top:8px">
-        <div class="batch-row">
-          <select id="batch-n">
-            <option value="5">5 samples</option>
-            <option value="10" selected>10 samples</option>
-            <option value="25">25 samples</option>
-            <option value="50">50 samples</option>
-          </select>
-          <select id="batch-dataset">
-            <option value="medquad" selected>MedQuAD</option>
-            <option value="medqa">MedQA-USMLE</option>
-            <option value="medmcqa">MedMCQA</option>
-          </select>
-          <button id="batch-run" class="secondary">Run batch</button>
-          <span id="batch-progress" style="font-size:12px;color:var(--muted);margin-left:auto"></span>
+  <section class="panel" id="result">
+    <h2>routing decision</h2>
+    <div id="placeholder" style="color:var(--muted)">Submit a question to see the cascade decision.</div>
+    <div id="answer-block" style="display:none">
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:14px">
+        <div class="answer" id="answer">?</div>
+        <div>
+          <span id="badge" class="badge weak">WEAK</span>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px"
+               id="model-used"></div>
         </div>
-        <div class="progress-bar" id="batch-bar" style="display:none"><div></div></div>
-        <pre id="batch-summary" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin:10px 0 0;white-space:pre-wrap"></pre>
+        <div id="correctness" style="margin-left:auto; font-size:13px; color:var(--muted);"></div>
       </div>
-    </details>
-  </div>
 
-  <div class="section">
-    <details>
-      <summary><strong>Audit log</strong> <span style="color:var(--muted);font-size:12px">&mdash; GDPR Art. 30 record. Prompt-hash only, no PHI. Refreshes after each run.</span></summary>
-      <div style="margin-top:10px">
-        <table class="audit-table" id="audit-table">
-          <thead>
-            <tr>
-              <th>time</th>
-              <th>prompt sha</th>
-              <th>router</th>
-              <th>score</th>
-              <th>final tier</th>
-              <th>chain &rarr; regions</th>
-              <th>cost</th>
-              <th>latency</th>
-            </tr>
-          </thead>
-          <tbody id="audit-rows"></tbody>
-        </table>
+      <div class="meta">
+        <div class="k">Router</div><div id="router-out"></div>
+        <div class="k">Uncertainty score</div>
+        <div>
+          <div id="score-text"></div>
+          <div class="bar"><div id="score-bar" style="width:0%"></div></div>
+        </div>
+        <div class="k">Threshold</div><div id="threshold-text"></div>
+        <div class="k">Latency</div><div id="latency"></div>
       </div>
-    </details>
-  </div>
+
+      <h2 style="margin-top:18px">router internals</h2>
+      <div id="extras"></div>
+
+      <h2 style="margin-top:18px">raw response</h2>
+      <pre id="raw"></pre>
+    </div>
+  </section>
 </main>
 
+<section class="audit" id="compare-section" style="display:none">
+  <div class="audit-head">
+    <strong>Side-by-side router comparison</strong>
+    <span class="audit-meta">— same prompt, all enabled routers, in parallel</span>
+    <span class="audit-meta" style="margin-left:auto" id="compare-meta"></span>
+  </div>
+  <div class="audit-body" style="display:block; padding:12px">
+    <div class="compare-grid" id="compare-grid"></div>
+  </div>
+</section>
+
+<section class="audit" id="retune-section" style="display:none">
+  <div class="audit-head">
+    <strong>Threshold retune</strong>
+    <span class="audit-meta">— recommendations from labeled history. Apply to update the live cascade.</span>
+  </div>
+  <div class="audit-body" style="display:block; padding:12px">
+    <div id="retune-content"></div>
+  </div>
+</section>
+
+<section class="audit" id="audit">
+  <div class="audit-head" id="audit-toggle">
+    <span class="caret">▶</span>
+    <strong>Audit log</strong>
+    <span class="audit-meta">— GDPR Art. 30 record of processing. Prompt-hash only, no PHI.</span>
+    <span class="audit-meta" style="margin-left:auto" id="audit-count"></span>
+  </div>
+  <div class="audit-body">
+    <table class="audit-table" id="audit-table">
+      <thead>
+        <tr>
+          <th>time</th>
+          <th>prompt sha</th>
+          <th>router</th>
+          <th>score</th>
+          <th>decision</th>
+          <th>processors → regions</th>
+          <th>tokens</th>
+          <th>cost (actual / all-strong)</th>
+          <th>latency</th>
+        </tr>
+      </thead>
+      <tbody id="audit-rows">
+        <tr><td colspan="9" class="audit-empty">No decisions yet — submit a question above.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <script>
-const EXAMPLES = [
-  {
-    label: "Q1 (\u2192 nano): opioid overdose antidote",
-    text: "What is the antidote for an opioid overdose with respiratory depression?",
-    gold: "Naloxone (e.g., Narcan). Reverses opioid receptor binding to restore respiratory drive. IV/IM/IN routes; titrate to respiratory rate, not full alertness.",
-  },
-  {
-    label: "Q2 (\u2192 mini): stroke thrombolysis eligibility",
-    text: "A 55-year-old with hypertension presents 90 minutes after sudden onset of right-sided weakness and expressive aphasia. BP 175/95, glucose 6.5 mmol/L (117 mg/dL), no anticoagulants, no recent surgery or bleeding history. NIHSS 12. Non-contrast head CT shows no hemorrhage and no early ischemic changes. Is this patient eligible for IV thrombolysis with alteplase or tenecteplase, and what is the time window? Justify briefly.",
-    gold: "Yes \u2014 eligible for IV thrombolysis. Within the standard 4.5-hour window from symptom onset (currently 1.5 h). No contraindications listed: no ICH on CT, BP can be lowered to <185/110 if not already, no anticoagulants, no recent surgery. Alteplase 0.9 mg/kg (max 90 mg) or tenecteplase 0.25 mg/kg (max 25 mg) IV. Goal door-to-needle <60 min. Consider thrombectomy if large-vessel occlusion on CTA.",
-  },
-  {
-    label: "Q3 (\u2192 base): flecainide overdose ACLS",
-    text: "An adult patient in cardiac arrest from confirmed flecainide overdose has refractory wide-complex tachycardia despite three rounds of standard ACLS. State exhaustively: (a) the SPECIFIC sodium channel blocker overdose antidote regimen with exact dose, mEq, and infusion strategy; (b) the role of intravenous lipid emulsion therapy with specific dose; (c) why amiodarone is contraindicated; (d) the role of ECMO; (e) the target serum pH; (f) the specific contraindicated antiarrhythmics in this scenario.",
-    gold: "(a) Sodium bicarbonate IV: 1-2 mEq/kg bolus repeated to narrow QRS; continuous infusion 150 mEq NaHCO3 in 1L D5W at 2-3 mL/kg/hr targeting pH 7.50-7.55. (b) Lipid emulsion (Intralipid 20%): 1.5 mL/kg IV bolus, then 0.25 mL/kg/min for 30-60 min; max 10 mL/kg in first 30 min. (c) Amiodarone CONTRAINDICATED \u2014 Class III with Class I sodium channel blocking activity that compounds toxicity. (d) ECMO/VA-ECLS for refractory cardiogenic shock; criteria: persistent instability, lactate rising. (e) Target pH 7.50-7.55. (f) Avoid Class Ia, Ic, beta blockers, calcium channel blockers. Lidocaine acceptable.",
-  },
-];
-
-const METRIC_DESCRIPTIONS = {
-  self_reported: "follow-up call: 'rate your confidence 0\u2013100'",
-  self_consistency: "N samples; score = 1 \u2212 (modal cluster / N) by exact text",
-  predictive_entropy: "mean per-token entropy of top-k logprobs / log(k)",
-  semantic_entropy_embed: "N samples \u2192 embed \u2192 cosine cluster \u2192 entropy / log(N)",
-  semantic_entropy: "N samples \u2192 NLI bidirectional clustering \u2192 entropy / log(N)",
-};
-
-const goldByText = Object.fromEntries(EXAMPLES.map(e => [e.text, e.gold]));
-
 const $ = (id) => document.getElementById(id);
-const tierHeaderEl = $('tier-header');
-const sharedRowEl  = $('shared-row');
-const gridEl       = $('grid');
-const finalsEl     = $('finals');
-const examplesEl   = $('examples');
-const promptEl     = $('prompt');
-const goBtn        = $('go');
 
-let TIERS = [];
-let METRICS = [];
-let totalCost = 0, totalLat = 0;
-let baselineInputTokens = 0;
-let baselineMaxOutputTokens = 0;
-let runStart = 0;
-
-function el(tag, opts) {
-  const e = document.createElement(tag);
-  if (!opts) return e;
-  if (opts.cls) e.className = opts.cls;
-  if (opts.id) e.id = opts.id;
-  if (opts.text != null) e.textContent = opts.text;
-  if (opts.style) Object.assign(e.style, opts.style);
-  if (opts.attrs) for (const [k, v] of Object.entries(opts.attrs)) e.setAttribute(k, v);
-  if (opts.children) for (const c of opts.children) if (c) e.appendChild(c);
-  return e;
-}
-
-function buildMessages(prompt) {
-  return [{
-    role: "user",
-    content:
-      "You are a careful medical expert answering a consumer health question. " +
-      "Be accurate and concise \u2014 1-3 sentences for simple questions; " +
-      "more detail for clinical scenarios.\n\nQuestion: " + prompt,
-  }];
-}
-
-function showGoldFor(promptText) {
-  const gold = goldByText[promptText.trim()];
-  const panel = $('gold-panel');
-  const txt = $('gold-text');
-  if (gold) {
-    txt.textContent = gold;
-    panel.classList.remove('hidden');
-  } else if (window.__currentReference) {
-    txt.textContent = window.__currentReference;
-    panel.classList.remove('hidden');
-  } else {
-    txt.textContent = '';
-    panel.classList.add('hidden');
+function buildMessages() {
+  const q = $("q").value.trim();
+  if (!q) return null;
+  const format = window.__currentFormat || "mcq";
+  if (format === "free_form") {
+    return [{
+      role: "user",
+      content:
+        "You are a careful medical expert answering a consumer health question. " +
+        "Be accurate and concise — 1-3 sentences.\n\nQuestion: " + q,
+    }];
   }
+  const opts = ["opa","opb","opc","opd"].map(k => $(k).value.trim());
+  if (opts.some(o => !o)) return null;
+  const prompt = `You are a careful medical expert answering a multiple-choice question.\n\n` +
+    `Question: ${q}\n` +
+    `A) ${opts[0]}\nB) ${opts[1]}\nC) ${opts[2]}\nD) ${opts[3]}\n\n` +
+    `Reply with a single letter (A, B, C, or D) and nothing else.`;
+  return [{ role: "user", content: prompt }];
 }
 
-function currentReference() {
-  const p = promptEl.value.trim();
-  return goldByText[p] || window.__currentReference || null;
+function setFormat(format) {
+  window.__currentFormat = format;
+  document.getElementById("mcq-fields").style.display = format === "mcq" ? "block" : "none";
+  document.getElementById("freeform-fields").style.display = format === "free_form" ? "block" : "none";
 }
 
-EXAMPLES.forEach(({ label, text }) => {
-  const b = el('button', { cls: 'ex', text: label, attrs: { title: text } });
-  b.onclick = () => { promptEl.value = text; window.__currentReference = null; showGoldFor(text); };
-  examplesEl.appendChild(b);
-});
-
-promptEl.addEventListener('input', () => { window.__currentReference = null; showGoldFor(promptEl.value); });
-window.addEventListener('DOMContentLoaded', () => showGoldFor(promptEl.value));
-
-async function loadConfig() {
-  const [tr, mr] = await Promise.all([fetch('/v1/tiers'), fetch('/v1/metrics-meta')]);
-  TIERS = await tr.json();
-  METRICS = await mr.json();
-  renderSkeleton();
-}
-
-function makeSharedCol(i) {
-  const c = el('div', { cls: 'col-info', id: `shared-${i}` });
-  const lines = [
-    [el('span', { cls: 'lbl', text: 'shared cost: ' }), el('span', { cls: 'v', text: '\u2014', attrs: { 'data-shared': '1' } })],
-    [el('span', { cls: 'lbl', text: 'main: ' }), el('span', { cls: 'v', text: '\u2014', attrs: { 'data-main': '1' } })],
-    [el('span', { cls: 'lbl', text: 'samples: ' }), el('span', { cls: 'v', text: '\u2014', attrs: { 'data-samples': '1' } })],
-  ];
-  for (const parts of lines) {
-    const line = el('span', { cls: 'line' });
-    for (const p of parts) line.appendChild(p);
-    c.appendChild(line);
+function renderExtras(router, extras) {
+  if (!extras || Object.keys(extras).length === 0) return "<em>none</em>";
+  // When auto delegated, show what it picked + render the sub-router's extras.
+  if (router === "auto" && extras.auto_router) {
+    const subExtras = { ...extras };
+    delete subExtras.auto_format; delete subExtras.auto_router; delete subExtras.auto_threshold_used;
+    return `
+      <div class="extras-grid" style="margin-bottom:8px">
+        <div class="k">detected format</div><div>${extras.auto_format}</div>
+        <div class="k">delegated to</div><div><strong>${extras.auto_router}</strong></div>
+        <div class="k">threshold used</div><div>${extras.auto_threshold_used}</div>
+      </div>` + renderExtras(extras.auto_router, subExtras);
   }
-  return c;
-}
-
-function renderSkeleton() {
-  tierHeaderEl.replaceChildren();
-  tierHeaderEl.appendChild(el('div', { cls: 'col-label spacer' }));
-  TIERS.forEach((t, i) => {
-    const c = el('div', { cls: 'col-label', id: `col-${i}` });
-    c.appendChild(el('div', { cls: 'name', text: t.model }));
-    c.appendChild(el('div', { cls: 'pricing', text: `$${t.input_per_m.toFixed(2)} in \u00b7 $${t.output_per_m.toFixed(2)} out / 1M` }));
-    tierHeaderEl.appendChild(c);
-  });
-
-  sharedRowEl.replaceChildren();
-  const spacer = el('div', { cls: 'col-info spacer' });
-  spacer.appendChild(el('span', { cls: 'lbl', text: 'shared per tier:' }));
-  spacer.appendChild(el('br'));
-  spacer.appendChild(el('span', { cls: 'v', text: 'main + N samples + logprobs' }));
-  sharedRowEl.appendChild(spacer);
-  TIERS.forEach((_, i) => sharedRowEl.appendChild(makeSharedCol(i)));
-
-  gridEl.replaceChildren();
-  METRICS.forEach((m) => {
-    const row = el('div', { cls: 'metric-row' });
-    row.style.setProperty('--accent-color', `var(--m-${m.name})`);
-    const lbl = el('div', { cls: 'metric-label' });
-    lbl.appendChild(el('div', { cls: 'mname', text: m.label }));
-    lbl.appendChild(el('div', { cls: 'mthr', text: `escalate if score \u2265 ${m.threshold.toFixed(2)}` }));
-    lbl.appendChild(el('div', { cls: 'mdesc', text: METRIC_DESCRIPTIONS[m.name] || '' }));
-    row.appendChild(lbl);
-    TIERS.forEach((_, ci) => {
-      const cell = el('div', { cls: 'cell idle', id: `cell-${m.name}-${ci}` });
-      cell.appendChild(el('div', { cls: 'status', text: 'waiting' }));
-      cell.appendChild(el('div', { cls: 'score', text: '\u2014' }));
-      cell.appendChild(el('div', { cls: 'extras' }));
-      row.appendChild(cell);
-    });
-    gridEl.appendChild(row);
-  });
-
-  finalsEl.replaceChildren();
-  METRICS.forEach(m => {
-    const card = el('div', { cls: 'final-card', id: `final-${m.name}` });
-    card.style.setProperty('--accent-color', `var(--m-${m.name})`);
-    const title = el('div', { cls: 'ftitle' });
-    title.appendChild(el('div', { cls: 'fname', text: m.label }));
-    title.appendChild(el('div', { cls: 'ftier', text: '\u2014' }));
-    title.appendChild(el('div', { cls: 'verdict' }));
-    card.appendChild(title);
-    card.appendChild(el('div', { cls: 'fanswer empty', text: 'no run yet', style: { color: 'var(--muted)', fontStyle: 'italic' } }));
-    card.appendChild(el('div', { cls: 'fjudge', text: '' }));
-    finalsEl.appendChild(card);
-  });
-
-  // initial empty audit row
-  const tbody = $('audit-rows');
-  if (!tbody.firstElementChild) {
-    const tr = el('tr');
-    const td = el('td', { cls: 'audit-empty', text: 'No decisions yet \u2014 submit a question above.', attrs: { colspan: '8' } });
-    tr.appendChild(td);
-    tbody.appendChild(tr);
+  if (router === "self_consistency" && extras.letters) {
+    const modal = extras.modal;
+    return `
+      <div class="extras-grid">
+        <div class="k">samples (n=${extras.n})</div>
+        <div class="pill-row">
+          ${extras.letters.map(l => `<span class="pill ${l===modal?'match':''}">${l}</span>`).join("")}
+        </div>
+        <div class="k">modal</div><div>${modal} (${extras.modal_count} of ${extras.n})</div>
+      </div>`;
   }
-}
-
-function resetUI() {
-  totalCost = 0; totalLat = 0;
-  baselineInputTokens = 0; baselineMaxOutputTokens = 0;
-  ['t-cost','t-base','t-sav','t-lat'].forEach(id => $(id).textContent = '\u2014');
-  $('t-sav').style.color = '';
-  TIERS.forEach((_, i) => {
-    const sh = $(`shared-${i}`);
-    sh.querySelectorAll('[data-shared],[data-main],[data-samples]').forEach(s => s.textContent = '\u2014');
-  });
-  METRICS.forEach(m => {
-    TIERS.forEach((_, ci) => {
-      const cell = $(`cell-${m.name}-${ci}`);
-      cell.className = 'cell idle';
-      cell.querySelector('.status').textContent = 'waiting';
-      cell.querySelector('.score').textContent = '\u2014';
-      cell.querySelector('.extras').textContent = '';
-      const vm = cell.querySelector('.verdict-mark'); if (vm) vm.remove();
-    });
-    const card = $(`final-${m.name}`);
-    const ans = card.querySelector('.fanswer');
-    ans.textContent = 'running\u2026'; ans.style.color = 'var(--muted)'; ans.style.fontStyle = 'italic';
-    card.querySelector('.ftier').className = 'ftier'; card.querySelector('.ftier').textContent = '\u2014';
-    const v = card.querySelector('.verdict'); v.className = 'verdict'; v.textContent = '';
-    card.querySelector('.fjudge').textContent = '';
-  });
-}
-
-function setCellResult(metric, ti, score, threshold, escalate, extras) {
-  const cell = $(`cell-${metric}-${ti}`);
-  if (!cell) return;
-  cell.className = `cell ${escalate ? 'escalate-cell' : 'commit-cell'}`;
-  cell.querySelector('.status').textContent = escalate ? 'escalated' : 'committed';
-  const sc = cell.querySelector('.score');
-  sc.replaceChildren();
-  sc.appendChild(document.createTextNode(score.toFixed(3)));
-  const tag = el('span', { cls: 'threshold-tag', text: `/ ${threshold.toFixed(2)}` });
-  sc.appendChild(tag);
-  let vm = cell.querySelector('.verdict-mark');
-  if (!vm) { vm = el('div', { cls: 'verdict-mark' }); cell.insertBefore(vm, cell.querySelector('.extras')); }
-  vm.className = `verdict-mark ${escalate ? 'escalate' : 'commit'}`;
-  vm.textContent = escalate ? '\u2191 escalate' : '\u2713 commit';
-  cell.querySelector('.extras').textContent = formatExtras(metric, extras);
-}
-
-function formatExtras(metric, ex) {
-  if (!ex) return '';
-  if (metric === 'self_reported') {
-    if (ex.confidence != null) return `confidence: ${ex.confidence}/100`;
-    if (ex.confidence_pct != null) return `confidence: ${ex.confidence_pct}%`;
-    return ex.parsed === null ? 'unparsed' : '';
+  if (router === "self_reported") {
+    return `
+      <div class="extras-grid">
+        <div class="k">model said</div><div>${extras.confidence ?? "?"}/100</div>
+        <div class="k">raw</div><div><code>${(extras.raw||"").replace(/[<>]/g,'')}</code></div>
+      </div>`;
   }
-  if (metric === 'self_consistency') {
-    if (ex.n_unique != null) return `${ex.n_unique}/${ex.n} unique  modal=${ex.modal_count}`;
-    if (ex.modal_count != null) return `modal=${ex.modal_count}/${ex.n}`;
-    return '';
+  if (router === "predictive_entropy") {
+    return `
+      <div class="extras-grid">
+        <div class="k">raw entropy (nats)</div><div>${(extras.raw_entropy_nats??0).toFixed(4)}</div>
+        <div class="k">normalizer log(k)</div><div>${(extras.normalizer_log_k??0).toFixed(4)}</div>
+        <div class="k">letter token used</div><div>${extras.letter_token_used ? "yes" : "fell back to mean"}</div>
+      </div>`;
   }
-  if (metric === 'predictive_entropy') {
-    return `H=${(ex.raw_entropy_nats||0).toFixed(2)} nats`;
+  if (router === "semantic_entropy") {
+    return `
+      <div class="extras-grid">
+        <div class="k">samples</div><div>n=${extras.n}</div>
+        <div class="k">cluster sizes</div><div>${(extras.clusters||[]).join(", ")}</div>
+        <div class="k">raw entropy (nats)</div><div>${(extras.raw_entropy_nats??0).toFixed(4)}</div>
+      </div>`;
   }
-  if (metric === 'semantic_entropy_embed' || metric === 'semantic_entropy') {
-    const sizes = ex.cluster_sizes || ex.clusters || [];
-    return `clusters: [${sizes.join(',')}]`;
-  }
-  return '';
+  return `<pre>${JSON.stringify(extras,null,2)}</pre>`;
 }
 
-function updateSharedCost(ti, kind, cost) {
-  const sh = $(`shared-${ti}`);
-  if (!sh) return;
-  if (kind === 'main') sh.querySelector('[data-main]').textContent = `$${cost.toFixed(5)}`;
-  if (kind === 'samples') sh.querySelector('[data-samples]').textContent = `$${cost.toFixed(5)}`;
-  const main = parseFloat((sh.querySelector('[data-main]').textContent.replace('$','')) || '0') || 0;
-  const samples = parseFloat((sh.querySelector('[data-samples]').textContent.replace('$','')) || '0') || 0;
-  sh.querySelector('[data-shared]').textContent = `$${(main + samples).toFixed(5)}`;
-}
-
-function markSkippedFor(metric, fromTi) {
-  for (let ci = fromTi + 1; ci < TIERS.length; ci++) {
-    const cell = $(`cell-${metric}-${ci}`);
-    if (cell && cell.classList.contains('idle')) cell.className = 'cell skipped';
+async function run() {
+  $("err").textContent = "";
+  const messages = buildMessages();
+  if (!messages) {
+    $("err").textContent = "Fill in a question and all four options.";
+    return;
   }
-}
-
-async function judgeFinal(metric, prompt, reference, predicted) {
-  const card = $(`final-${metric}`);
-  const v = card.querySelector('.verdict');
-  const reason = card.querySelector('.fjudge');
-  v.className = 'verdict judging'; v.textContent = 'judging\u2026';
-  reason.textContent = '';
+  const router = $("router").value;
+  const btn = $("run"); btn.disabled = true; btn.textContent = "Routing…";
+  const t0 = performance.now();
   try {
-    const r = await fetch('/v1/judge', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ question: prompt, reference, predicted }),
+    const r = await fetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, router }),
     });
-    if (!r.ok) throw new Error(`judge ${r.status}`);
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(`${r.status}: ${txt}`);
+    }
     const body = await r.json();
-    v.className = `verdict ${body.correct ? 'correct' : 'incorrect'}`;
-    v.textContent = body.correct ? '\u2713 correct' : '\u2717 incorrect';
-    reason.textContent = body.judge_model ? `judge: ${body.judge_model}` : '';
-  } catch (e) {
-    v.className = 'verdict no-gold'; v.textContent = 'judge error';
-    reason.textContent = String(e);
-  }
-}
+    render(body, router, performance.now() - t0);
 
-function setMetricFinal(metric, model, ti, answer) {
-  const card = $(`final-${metric}`);
-  const ftier = card.querySelector('.ftier');
-  ftier.className = 'ftier committed';
-  ftier.textContent = `\u2192 ${model}`;
-  const ans = card.querySelector('.fanswer');
-  ans.style.color = 'var(--text)'; ans.style.fontStyle = 'normal';
-  ans.textContent = answer;
-  markSkippedFor(metric, ti);
-  const reference = currentReference();
-  if (reference && answer) {
-    judgeFinal(metric, promptEl.value.trim(), reference, answer);
-  } else {
-    const v = card.querySelector('.verdict');
-    v.className = 'verdict no-gold'; v.textContent = 'no reference';
-  }
-}
-
-async function streamCascade(prompt, handler) {
-  const r = await fetch('/v1/run', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: buildMessages(prompt) }),
-  });
-  if (!r.ok || !r.body) {
-    throw new Error(`run failed: ${r.status} ${await r.text()}`);
-  }
-  const reader = r.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buf.indexOf('\n\n')) !== -1) {
-      const frame = buf.slice(0, idx);
-      buf = buf.slice(idx + 2);
-      const lines = frame.split('\n');
-      let evt = 'message';
-      let data = '';
-      for (const line of lines) {
-        if (line.startsWith('event: ')) evt = line.slice(7).trim();
-        else if (line.startsWith('data: ')) data += line.slice(6);
-      }
-      if (data) {
-        try { handler(evt, JSON.parse(data)); }
-        catch (e) { console.warn('bad SSE frame', e, data); }
-      }
+    const goldLetter = ($("gold").value || "").toUpperCase();
+    const predicted = (body.choices[0].message.content.match(/[A-D]/i) || [""])[0].toUpperCase();
+    if (goldLetter && /^[A-D]$/.test(goldLetter)) {
+      const correct = predicted === goldLetter;
+      $("correctness").innerHTML = correct
+        ? `<span class="gold">✓ correct (gold ${goldLetter})</span>`
+        : `<span style="color:var(--strong)">✗ wrong, gold was ${goldLetter}</span>`;
+      // Push to /v1/eval/observe so Grafana sees it. When `auto` delegated to
+      // a sub-router, attribute the observation to whichever router actually
+      // ran — auto is a meta-router and should never appear as its own series.
+      const effectiveRouter = body.med_routing.extras?.auto_router || router;
+      fetch("/v1/eval/observe", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          router: effectiveRouter, score: body.med_routing.score,
+          escalated: body.med_routing.escalated, correct,
+          subject: window.__lastSubject || null,
+        }),
+      }).catch(()=>{});
+    } else {
+      $("correctness").textContent = "";
     }
-  }
-}
-
-function handleEvent(type, d) {
-  if (type === 'tier_start') {
-    METRICS.forEach(m => {
-      const cell = $(`cell-${m.name}-${d.tier_index}`);
-      if (cell && cell.classList.contains('idle')) {
-        cell.className = 'cell pending';
-        cell.querySelector('.status').textContent = 'tier running';
-      }
-    });
-  } else if (type === 'tier_main_done') {
-    updateSharedCost(d.tier_index, 'main', d.cost);
-    totalCost += d.cost;
-    totalLat += d.latency;
-    if (baselineInputTokens === 0) baselineInputTokens = d.input_tokens;
-    if (d.output_tokens > baselineMaxOutputTokens) baselineMaxOutputTokens = d.output_tokens;
-  } else if (type === 'tier_samples_done') {
-    updateSharedCost(d.tier_index, 'samples', d.cost);
-    totalCost += d.cost;
-    totalLat += d.latency;
-  } else if (type === 'metric_score') {
-    setCellResult(d.metric, d.tier_index, d.score, d.threshold, d.escalate, d.extras);
-  } else if (type === 'metric_committed') {
-    setMetricFinal(d.metric, d.model, d.tier_index, d.answer);
-  } else if (type === 'metric_error') {
-    const cell = $(`cell-${d.metric}-${d.tier_index}`);
-    if (cell) {
-      cell.className = 'cell errored';
-      cell.querySelector('.status').textContent = 'error';
-      cell.querySelector('.score').textContent = '\u2014';
-      cell.querySelector('.extras').textContent = (d.error || '').slice(0, 80);
-    }
-  } else if (type === 'all_done') {
-    finalizeTotals();
-  } else if (type === 'error') {
-    $('err').textContent = `stream error: ${d.message || JSON.stringify(d)}`;
-  }
-}
-
-function finalizeTotals() {
-  $('t-cost').textContent = `$${totalCost.toFixed(5)}`;
-  const base = TIERS[TIERS.length - 1];
-  const alwaysBase = baselineInputTokens * base.input_per_m / 1e6
-                   + baselineMaxOutputTokens * base.output_per_m / 1e6;
-  $('t-base').textContent = `$${alwaysBase.toFixed(5)}`;
-  if (alwaysBase > 0) {
-    const sav = (1 - totalCost / alwaysBase) * 100;
-    $('t-sav').textContent = `${sav.toFixed(1)}%`;
-    $('t-sav').style.color = sav > 0 ? 'var(--good)' : 'var(--bad)';
-  }
-  $('t-lat').textContent = `${((performance.now() - runStart)/1000).toFixed(2)}s`;
-}
-
-async function runCascade(prompt) {
-  resetUI();
-  goBtn.disabled = true; goBtn.textContent = 'running\u2026';
-  $('err').textContent = '';
-  runStart = performance.now();
-  try {
-    await streamCascade(prompt, handleEvent);
   } catch (e) {
-    $('err').textContent = String(e);
+    $("err").textContent = String(e);
   } finally {
-    goBtn.disabled = false; goBtn.textContent = 'run cascade';
-    refreshAudit();
+    btn.disabled = false; btn.textContent = "Send to cascade";
   }
+}
+
+function render(body, router, ms) {
+  $("placeholder").style.display = "none";
+  $("answer-block").style.display = "block";
+  const meta = body.med_routing;
+  const text = body.choices[0].message.content;
+  const letter = (text.match(/[A-D]/i) || [""])[0].toUpperCase();
+
+  $("answer").textContent = letter || "?";
+  $("answer").className = "answer";
+
+  const badge = $("badge");
+  badge.textContent = meta.escalated ? "ESCALATED → STRONG" : "KEPT WEAK";
+  badge.className = "badge " + (meta.escalated ? "strong" : "weak");
+
+  $("model-used").textContent = body.model;
+  $("router-out").textContent = router;
+  $("score-text").textContent =
+    `${meta.score.toFixed(3)} (${(meta.score*100).toFixed(1)}% uncertain)`;
+  $("score-bar").style.width = `${(meta.score*100).toFixed(1)}%`;
+  $("threshold-text").textContent =
+    `${meta.threshold.toFixed(2)} — ${meta.score >= meta.threshold ? "exceeded → escalate" : "below → keep weak"}`;
+  $("latency").textContent = `${ms.toFixed(0)} ms`;
+
+  $("extras").innerHTML = renderExtras(router, meta.extras || {});
+  $("raw").textContent = JSON.stringify(body, null, 2);
 }
 
 async function loadRandom() {
-  $('err').textContent = '';
-  const ds = $('rand-dataset').value;
+  $("err").textContent = "";
+  const ds = document.getElementById("rand-dataset").value;
   try {
     const r = await fetch(`/v1/eval/sample?dataset=${encodeURIComponent(ds)}`);
     if (!r.ok) throw new Error(`sample endpoint returned ${r.status}`);
     const it = await r.json();
-    if (it.format === 'free_form' && it.reference_answer) {
-      promptEl.value = it.question;
-      window.__currentReference = it.reference_answer;
-    } else if (it.format === 'mcq') {
-      const opts = it.options || [];
-      const letterIdx = "ABCD".indexOf((it.answer || '').toUpperCase());
-      window.__currentReference = (letterIdx >= 0 && opts[letterIdx])
-        ? `Correct option: ${it.answer}) ${opts[letterIdx]}`
-        : null;
-      promptEl.value = it.question + "\n\nOptions:\n" + opts.map((o, i) => `${"ABCD"[i]}) ${o}`).join("\n");
+    $("q").value = it.question;
+    window.__lastSubject = it.subject;
+    if (it.format === "free_form") {
+      setFormat("free_form");
+      $("reference").value = it.reference_answer || "";
+      $("gold").value = "";
+      // If user is on a router that degenerates on free-form (string-match
+      // collapses), nudge them to the format-aware default. Skipped when
+      // they're already on `auto` or `semantic_entropy`.
+      const routerSel = document.getElementById("router");
+      const hasSE = Array.from(routerSel.options).some(o => o.value === "semantic_entropy");
+      if (hasSE && (routerSel.value === "self_consistency" || routerSel.value === "predictive_entropy")) {
+        routerSel.value = "auto";
+      }
     } else {
-      promptEl.value = it.question;
-      window.__currentReference = null;
+      setFormat("mcq");
+      $("opa").value = it.options[0];
+      $("opb").value = it.options[1];
+      $("opc").value = it.options[2];
+      $("opd").value = it.options[3];
+      $("gold").value = it.answer;
     }
-    showGoldFor(promptEl.value);
   } catch (e) {
-    $('err').textContent = String(e);
+    $("err").textContent = String(e);
   }
 }
 
 function fmtTime(ts) {
-  try { return new Date(ts).toLocaleTimeString(); } catch (e) { return ts; }
+  try {
+    return new Date(ts).toLocaleTimeString();
+  } catch (e) { return ts; }
 }
+
 function fmtCost(usd) {
-  if (usd == null) return "\u2014";
+  if (usd == null) return "—";
   if (usd === 0) return "$0";
   return "$" + usd.toFixed(usd < 0.01 ? 6 : 4);
 }
 
-function buildAuditRow(row) {
-  const tr = el('tr', { cls: row.cross_border ? 'cross-border' : '' });
-  tr.appendChild(el('td', { text: fmtTime(row.ts) }));
-  const shaTd = el('td', { text: ((row.prompt_sha||'').slice(0,10)) + '\u2026', attrs: { title: row.prompt_sha || '' } });
-  tr.appendChild(shaTd);
-  tr.appendChild(el('td', { text: row.router || '' }));
-  tr.appendChild(el('td', { text: (row.score ?? 0).toFixed(3) }));
-  const chain = Array.isArray(row.tier_chain) && row.tier_chain.length
-    ? row.tier_chain.map(v => v.tier_name || v.model).join(' \u2192 ')
-    : (row.escalated ? `${row.weak_processor || 'weak'} \u2192 ${row.strong_processor || 'strong'}` : (row.weak_processor || '\u2014'));
-  const finalTier = row.final_tier_name
-    || (row.tier_chain && row.tier_chain.length ? row.tier_chain[row.tier_chain.length-1].tier_name : (row.escalated ? 'strong' : 'weak'));
-  tr.appendChild(el('td', { text: finalTier }));
-  const chainTd = el('td');
-  chainTd.appendChild(document.createTextNode(chain + ' \u2192 '));
-  const home = row.home_region;
-  (row.regions_touched || []).forEach((reg, i) => {
-    if (i > 0) chainTd.appendChild(document.createTextNode(' '));
-    chainTd.appendChild(el('span', { cls: 'region-pill' + (reg === home ? '' : ' foreign'), text: reg }));
-  });
-  tr.appendChild(chainTd);
-  const costTd = el('td');
-  costTd.appendChild(document.createTextNode(fmtCost(row.cost_usd) + ' '));
-  costTd.appendChild(el('span', { style: { color: 'var(--muted)' }, text: '/ ' + fmtCost(row.counterfactual_usd) }));
-  tr.appendChild(costTd);
-  tr.appendChild(el('td', { text: (row.latency_ms ?? '\u2014') + ' ms' }));
-  return tr;
+function regionPill(region, isHome) {
+  const cls = isHome ? "region-pill" : "region-pill foreign";
+  return `<span class="${cls}">${region}</span>`;
 }
 
 async function refreshAudit() {
   let rows;
   try {
-    const r = await fetch('/v1/audit/recent?limit=20');
+    const r = await fetch("/v1/audit/recent?limit=20");
     if (!r.ok) return;
     rows = await r.json();
   } catch (e) { return; }
-  const tbody = $('audit-rows');
-  tbody.replaceChildren();
+
+  const tbody = document.getElementById("audit-rows");
+  document.getElementById("audit-count").textContent = `${rows.length} record${rows.length===1?"":"s"}`;
   if (!rows.length) {
-    const tr = el('tr');
-    tr.appendChild(el('td', { cls: 'audit-empty', text: 'No decisions yet \u2014 submit a question above.', attrs: { colspan: '8' } }));
-    tbody.appendChild(tr);
+    tbody.innerHTML = `<tr><td colspan="9" class="audit-empty">No decisions yet — submit a question above.</td></tr>`;
     return;
   }
-  rows.slice().reverse().forEach(row => tbody.appendChild(buildAuditRow(row)));
+  tbody.innerHTML = rows.slice().reverse().map(row => {
+    const home = row.home_region;
+    const procRegion = (row.regions_touched || []).map(r => regionPill(r, r === home)).join(" ");
+    const procName = row.escalated
+      ? `${row.weak_processor} → ${row.strong_processor}`
+      : row.weak_processor;
+    return `
+      <tr class="${row.cross_border ? "cross-border" : ""}">
+        <td>${fmtTime(row.ts)}</td>
+        <td title="${row.prompt_sha}">${(row.prompt_sha||"").slice(0,10)}…</td>
+        <td>${row.router}</td>
+        <td>${(row.score ?? 0).toFixed(3)}</td>
+        <td><span class="badge ${row.escalated?'strong':'weak'}">${row.escalated?'STRONG':'WEAK'}</span></td>
+        <td>${procName} → ${procRegion}</td>
+        <td>${(row.tokens_prompt||0)+(row.tokens_completion||0)}</td>
+        <td>${fmtCost(row.cost_usd)} <span style="color:var(--muted)">/ ${fmtCost(row.counterfactual_usd)}</span></td>
+        <td>${row.latency_ms ?? "—"} ms</td>
+      </tr>`;
+  }).join("");
+}
+
+function buildBatchMessages(it) {
+  // Free-form (medquad) → consumer-health prompt; otherwise MCQ template.
+  if (it.format === "free_form") {
+    return [{role:"user", content:
+      "You are a careful medical expert answering a consumer health question. " +
+      "Be accurate and concise — 1-3 sentences.\n\nQuestion: " + it.question}];
+  }
+  return [{role:"user", content:
+    `You are a careful medical expert answering a multiple-choice question.\n\n` +
+    `Question: ${it.question}\n` +
+    `A) ${it.options[0]}\nB) ${it.options[1]}\nC) ${it.options[2]}\nD) ${it.options[3]}\n\n` +
+    `Reply with a single letter (A, B, C, or D) and nothing else.`}];
 }
 
 async function runBatch() {
-  const btn = $('batch-run');
-  if (btn.dataset.running === '1') {
-    btn.dataset.running = '0';
-    btn.textContent = 'Stopping\u2026';
+  const btn = $("batch-run");
+  if (btn.dataset.running === "1") {
+    btn.dataset.running = "0";
+    btn.textContent = "Stopping…";
     return;
   }
-  const n = parseInt($('batch-n').value, 10);
-  const dataset = $('batch-dataset').value;
-  const progress = $('batch-progress');
-  const bar = $('batch-bar');
-  const summary = $('batch-summary');
-  btn.dataset.running = '1';
-  btn.textContent = 'Stop';
-  $('err').textContent = '';
-  bar.style.display = 'block';
-  bar.firstElementChild.style.width = '0%';
-  summary.textContent = '';
-
-  const tally = {};
-  METRICS.forEach(m => { tally[m.name] = { perTier: TIERS.map(() => 0), errors: 0 }; });
-  let runs = 0, runCostSum = 0, latSum = 0;
-
+  const n = parseInt($("batch-n").value, 10);
+  const dataset = $("batch-dataset").value;
+  const router = $("router").value;
+  const progress = $("batch-progress");
+  const bar = $("batch-bar");
+  btn.dataset.running = "1";
+  btn.textContent = "Stop";
+  $("err").textContent = "";
+  bar.style.display = "block";
+  bar.firstElementChild.style.width = "0%";
+  let correct = 0, escalated = 0, done = 0, scored = 0;
   for (let i = 0; i < n; i++) {
-    if (btn.dataset.running !== '1') break;
+    if (btn.dataset.running !== "1") break;
     bar.firstElementChild.style.width = `${(i/n*100).toFixed(1)}%`;
-    progress.textContent = `${i}/${n} \u00b7 ${dataset}`;
+    progress.textContent =
+      `${i}/${n} · ${dataset} · ${router}` +
+      (scored ? ` · acc ${(correct/scored*100).toFixed(0)}%` : "") +
+      (i ? ` · escalated ${(escalated/i*100).toFixed(0)}%` : "");
     try {
-      const itResp = await fetch(`/v1/eval/sample?dataset=${dataset}`);
-      if (!itResp.ok) throw new Error(`sample ${itResp.status}`);
-      const it = await itResp.json();
-      const promptText = it.format === 'mcq'
-        ? it.question + "\n\nOptions:\n" + (it.options||[]).map((o, k) => `${"ABCD"[k]}) ${o}`).join("\n")
-        : it.question;
-      let runCost = 0;
-      const t0 = performance.now();
-      await streamCascade(promptText, (type, d) => {
-        if (type === 'tier_main_done' || type === 'tier_samples_done') runCost += d.cost;
-        if (type === 'metric_committed') tally[d.metric].perTier[d.tier_index]++;
-        if (type === 'metric_error') tally[d.metric].errors++;
+      const it = await (await fetch(`/v1/eval/sample?dataset=${dataset}`)).json();
+      const messages = buildBatchMessages(it);
+      const r = await fetch("/v1/chat/completions", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({messages, router}),
       });
-      runs++;
-      runCostSum += runCost;
-      latSum += (performance.now() - t0);
+      if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+      const body = await r.json();
+      let isCorrect = null;
+      // We can only locally grade MCQ here; free-form needs LLM-as-judge which
+      // the runner CLI handles. For free-form we still observe (with correct=null
+      // → we just skip the correctness contribution).
+      if (it.format !== "free_form") {
+        const pred = (body.choices[0].message.content.match(/[A-D]/i)||[""])[0].toUpperCase();
+        isCorrect = pred === (it.answer||"").toUpperCase();
+        if (isCorrect) correct++;
+        scored++;
+      }
+      if (body.med_routing.escalated) escalated++;
+      done++;
+      if (isCorrect !== null) {
+        const effectiveRouter = body.med_routing.extras?.auto_router || router;
+        await fetch("/v1/eval/observe", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            router: effectiveRouter, score: body.med_routing.score,
+            escalated: body.med_routing.escalated, correct: isCorrect,
+            subject: it.subject,
+          }),
+        });
+      }
     } catch (e) {
-      $('err').textContent = `batch error at ${i+1}: ${e}`;
+      $("err").textContent = `batch error at ${i+1}: ${e}`;
       break;
     }
   }
-  bar.firstElementChild.style.width = '100%';
-  btn.dataset.running = '0';
-  btn.textContent = 'Run batch';
-
-  const lines = [`done \u00b7 ${runs}/${n} samples \u00b7 avg cost $${(runCostSum / Math.max(runs,1)).toFixed(5)} \u00b7 avg latency ${(latSum / Math.max(runs,1) / 1000).toFixed(2)}s`];
-  for (const m of METRICS) {
-    const dist = tally[m.name].perTier.map((c, i) => `${TIERS[i].name}=${c}`).join(' ');
-    const errs = tally[m.name].errors ? ` (errors=${tally[m.name].errors})` : '';
-    lines.push(`  ${m.label.padEnd(28)}  ${dist}${errs}`);
-  }
-  progress.textContent = `done \u00b7 ${runs} samples`;
-  summary.textContent = lines.join('\n');
+  bar.firstElementChild.style.width = "100%";
+  progress.textContent = done
+    ? `done · ${done} samples · ` +
+      (scored ? `acc ${(correct/scored*100).toFixed(1)}% · ` : "") +
+      `escalated ${(escalated/done*100).toFixed(1)}%`
+    : "";
+  btn.dataset.running = "0";
+  btn.textContent = "Run batch";
   refreshAudit();
 }
 
-goBtn.onclick = () => {
-  const p = promptEl.value.trim();
-  if (!p) return;
-  runCascade(p);
-};
-promptEl.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) goBtn.click();
-});
-$('rand').addEventListener('click', loadRandom);
-$('batch-run').addEventListener('click', runBatch);
+async function runCompare() {
+  const messages = buildMessages();
+  if (!messages) {
+    $("err").textContent = "Fill in a question and (for MCQ) all four options.";
+    return;
+  }
+  const btn = $("compare-run");
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  $("err").textContent = "";
+  const section = $("compare-section");
+  section.style.display = "block";
+  $("compare-grid").innerHTML = '<div class="audit-empty">Routing in parallel across all enabled routers…</div>';
+  $("compare-meta").textContent = "";
+  const t0 = performance.now();
+  try {
+    const r = await fetch("/v1/compare", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({messages}),
+    });
+    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    const body = await r.json();
+    const ms = performance.now() - t0;
+    $("compare-meta").textContent = `${body.results.length} routers · ${ms.toFixed(0)} ms total`;
+    $("compare-grid").innerHTML = body.results.map(r => {
+      if (r.error) {
+        return `<div class="compare-card"><div class="name">${r.router}</div>
+                <div style="color:var(--strong);font-size:12px;margin-top:6px">error: ${r.error}</div></div>`;
+      }
+      const letter = (r.text.match(/[A-D]/i)||[""])[0].toUpperCase();
+      const badge = r.escalated
+        ? '<span class="badge strong">ESCALATED</span>'
+        : '<span class="badge weak">KEPT WEAK</span>';
+      const exceeds = r.score >= r.threshold;
+      const scorePct = (r.score*100).toFixed(1);
+      const thrPct = (r.threshold*100).toFixed(1);
+      return `<div class="compare-card">
+        <div class="name">${r.router}</div>
+        <div class="answer-row">
+          <div class="a">${letter || "?"}</div>
+          ${badge}
+        </div>
+        <div class="meta-line">score ${r.score.toFixed(3)} · threshold ${r.threshold.toFixed(2)} ${exceeds?"<strong>exceeded</strong>":"below"}</div>
+        <div class="bar"><div style="width:${scorePct}%"></div></div>
+        <div class="meta-line">model: ${r.model_used} · ${r.latency_ms} ms</div>
+        <div class="text-preview">${(r.text||"").replace(/[<>]/g,"").slice(0,200)}</div>
+      </div>`;
+    }).join("");
+    refreshAudit();
+  } catch (e) {
+    $("compare-grid").innerHTML = `<div class="audit-empty" style="color:var(--strong)">error: ${e}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Compare all routers";
+  }
+}
 
-loadConfig();
+async function openRetune() {
+  const section = $("retune-section");
+  section.style.display = "block";
+  $("retune-content").innerHTML = '<div class="audit-empty">Computing recommendations from history…</div>';
+  try {
+    const r = await fetch("/v1/feedback/recommendation?min_samples=20&target_kept_accuracy=0.75");
+    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    const body = await r.json();
+    const cards = Object.entries(body.recommendations).map(([router, rec]) => {
+      const cur = body.current_thresholds[router];
+      if (rec.skipped) {
+        return `<div class="retune-card">
+          <div><strong>${router}</strong></div>
+          <div class="retune-skipped">${rec.reason}</div>
+          <div></div>
+        </div>`;
+      }
+      const stats = rec.stats_at_threshold || {};
+      const detail = `keeps ${stats.n_would_keep}/${stats.n_total} weak ` +
+                     `(esc ${(stats.escalation_rate*100).toFixed(0)}%, ` +
+                     `kept_acc ${stats.kept_accuracy != null ? (stats.kept_accuracy*100).toFixed(0)+'%' : '—'})`;
+      return `<div class="retune-card">
+        <div><strong>${router}</strong></div>
+        <div>
+          <span class="region-pill">${cur}</span>
+          <span class="arrow">→</span>
+          <span class="region-pill foreign">${rec.threshold}</span>
+          <div class="retune-skipped">${detail}</div>
+        </div>
+        <button class="secondary" data-router="${router}" data-threshold="${rec.threshold}"
+                onclick="applyRetune(this)">Apply</button>
+      </div>`;
+    }).join("");
+    $("retune-content").innerHTML = cards || '<div class="audit-empty">No routers found.</div>';
+  } catch (e) {
+    $("retune-content").innerHTML = `<div class="audit-empty" style="color:var(--strong)">error: ${e}</div>`;
+  }
+}
+
+async function applyRetune(btn) {
+  const router = btn.dataset.router;
+  const threshold = parseFloat(btn.dataset.threshold);
+  btn.disabled = true; btn.textContent = "Applying…";
+  try {
+    const r = await fetch("/v1/feedback/apply", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({router, threshold, reason: "applied via UI retune"}),
+    });
+    if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+    btn.textContent = "Applied ✓";
+    btn.style.background = "rgba(63,185,80,0.2)";
+  } catch (e) {
+    btn.textContent = "Failed";
+    btn.style.background = "rgba(248,81,73,0.2)";
+  }
+}
+
+$("run").addEventListener("click", async () => { await run(); refreshAudit(); });
+$("rand").addEventListener("click", loadRandom);
+$("batch-run").addEventListener("click", runBatch);
+$("compare-run").addEventListener("click", runCompare);
+$("retune-open").addEventListener("click", openRetune);
+$("audit-toggle").addEventListener("click", () => {
+  document.getElementById("audit").classList.toggle("open");
+  refreshAudit();
+});
+
+// Initial population on page load (will show "No decisions yet" if empty).
 refreshAudit();
 </script>
 </body>

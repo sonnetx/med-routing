@@ -127,3 +127,51 @@ async def test_cascade_with_auto_uses_subrouter_threshold():
     assert res.extras["auto_router"] == "predictive_entropy"
     # And the threshold the cascade used must be predictive_entropy's, not auto's.
     assert res.threshold == pytest.approx(0.40)
+
+
+async def test_cascade_with_auto_metrics_attributed_to_subrouter():
+    """When auto delegates, the per-router Prometheus counters should bump
+    the SUB-router's series, not 'auto'. The audit trail keeps router='auto'
+    so we still know what the user asked for, but the operational metrics
+    treat auto as transparent."""
+    from med_routing.audit import AuditLogger
+    from med_routing.metrics import REQUESTS_TOTAL, ACTUAL_COST_BY_ROUTER
+
+    fake = FakeOpenAIClient()
+    weak = make_completion("B", model="gpt-4o-mini")
+    fake.script(model="gpt-4o-mini", n=1, completions=[weak])
+    fake.script(model="gpt-4o-mini", n=5, completions=[make_completion("B") for _ in range(5)])
+
+    sub = {
+        "predictive_entropy": PredictiveEntropyRouter(),
+        "self_consistency": SelfConsistencyRouter(),
+        "self_reported": SelfReportedRouter(fake),
+    }
+    auto = AutoRouter(sub_routers=sub)
+    routers = {**sub, "auto": auto}
+    audit = AuditLogger(root="audit_test_tmp")
+    controller = CascadeController(
+        client=fake, routers=routers, cache=CompletionCache(maxsize=64), audit=audit,
+    )
+
+    def total_for(router_label: str) -> float:
+        return sum(
+            REQUESTS_TOTAL.labels(router=router_label, escalated=esc)._value.get()
+            for esc in ("true", "false")
+        )
+
+    auto_before = total_for("auto")
+    pe_before = total_for("predictive_entropy")
+
+    msgs = [{"role": "user", "content": "Q?\nA) 1\nB) 2\nC) 3\nD) 4\nSingle letter."}]
+    await controller.handle(msgs, "auto")
+
+    # auto must NOT increment under its own name (regardless of escalation).
+    assert total_for("auto") == auto_before
+    # predictive_entropy (the chosen sub-router) must increment by exactly 1.
+    assert total_for("predictive_entropy") - pe_before == 1
+
+    # Audit row still says router="auto" — that's what the user requested.
+    audit_rows = audit.recent()
+    assert audit_rows[-1]["router"] == "auto"
+    audit.close()

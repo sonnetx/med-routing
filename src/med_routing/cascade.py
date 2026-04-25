@@ -158,7 +158,18 @@ class CascadeController:
             rs = await router.score(messages=messages, weak=comp, sampler=sampler)
             cur_threshold = rs.threshold_override if rs.threshold_override is not None else threshold
 
-            UNCERTAINTY.labels(router=router_name).observe(rs.score)
+            # Operational metric label: when a meta-router (auto) delegated to
+            # a sub-router, attribute the metrics to the sub-router that
+            # actually produced the score. The audit row still records
+            # `router_name` so we know what the user *requested*. Keeps `auto`
+            # from appearing as its own series in any per-router Grafana panel.
+            tier_metric_router = router_name
+            if isinstance(rs.extras, dict):
+                delegated = rs.extras.get("auto_router")
+                if delegated:
+                    tier_metric_router = delegated
+
+            UNCERTAINTY.labels(router=tier_metric_router).observe(rs.score)
             escalate = rs.score >= cur_threshold and not is_last
 
             visits.append(TierVisit(
@@ -184,9 +195,18 @@ class CascadeController:
         text = final_visit.completion.text
         model_used = final_visit.model
 
-        REQUESTS_TOTAL.labels(router=router_name, escalated=str(escalated_overall).lower()).inc()
-        LATENCY_SECONDS.labels(router=router_name, tier=final_visit.tier_name).observe(elapsed)
-        self._bump(router_name, escalated_overall)
+        # Effective router for post-loop metrics: same auto-transparency logic
+        # applied to the last tier's extras (auto picks one sub-router for the
+        # whole prompt, so this matches the per-tier label too).
+        metric_router = router_name
+        if isinstance(last_extras, dict):
+            delegated = last_extras.get("auto_router")
+            if delegated:
+                metric_router = delegated
+
+        REQUESTS_TOTAL.labels(router=metric_router, escalated=str(escalated_overall).lower()).inc()
+        LATENCY_SECONDS.labels(router=metric_router, tier=final_visit.tier_name).observe(elapsed)
+        self._bump(metric_router, escalated_overall)
 
         # Counterfactual = top-tier model on this prompt. Use its actual token
         # counts if we visited it; else estimate from the cheapest call we made.
@@ -196,13 +216,13 @@ class CascadeController:
         else:
             ref = visits[0].completion
             counterfactual = cost_usd(top_tier.model, ref.prompt_tokens, ref.completion_tokens)
-        ACTUAL_COST_BY_ROUTER.labels(router=router_name).inc(total_actual)
-        COUNTERFACTUAL_COST_BY_ROUTER.labels(router=router_name).inc(counterfactual)
+        ACTUAL_COST_BY_ROUTER.labels(router=metric_router).inc(total_actual)
+        COUNTERFACTUAL_COST_BY_ROUTER.labels(router=metric_router).inc(counterfactual)
 
         for region in regions:
             if is_cross_border(region, s.home_region):
                 CROSS_BORDER_TOTAL.labels(
-                    router=router_name,
+                    router=metric_router,
                     home_region=s.home_region,
                     foreign_region=region,
                 ).inc()

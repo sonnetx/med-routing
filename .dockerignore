@@ -1,0 +1,24 @@
+# Keep compiled bytecode out of the image. Local .pyc files compiled from older
+# versions of .py files would ride along with `COPY src ./src` and Python would
+# prefer them over the .py source — silently running stale code in the
+# container even after a clean --no-cache rebuild.
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local dev-only artifacts
+.venv/
+venv/
+.git/
+.env
+.env.local
+
+# Build / test outputs
+hf_cache/
+audit_test_tmp/
+models/
+runs/
+.cache/
