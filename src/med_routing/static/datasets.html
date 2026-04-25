@@ -77,24 +77,6 @@
   .progress > div { height: 100%; background: var(--accent); width: 0%;
                     transition: width 0.4s ease; }
 
-  .chart-wrap { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
-  svg.chart { width: 100%; height: 360px; background: #0d1117; border: 1px solid var(--line);
-              border-radius: 6px; }
-  svg.chart .axis { stroke: var(--line); stroke-width: 1; }
-  svg.chart .grid { stroke: #21262d; stroke-width: 1; stroke-dasharray: 2,2; }
-  svg.chart .axis-text { fill: var(--muted); font-size: 11px; font-family: ui-monospace, monospace; }
-  svg.chart .pt { fill: var(--muted); }
-  svg.chart .pt.frontier { fill: var(--accent); }
-  svg.chart .pt.recommended { fill: var(--weak); stroke: var(--weak); stroke-width: 2; fill-opacity: 0.6; }
-  svg.chart .baseline { stroke-width: 1; stroke-dasharray: 4,3; fill: none; }
-  svg.chart .baseline.weak { stroke: var(--weak); }
-  svg.chart .baseline.strong { stroke: var(--strong); }
-  svg.chart .frontier-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-opacity: 0.6; }
-
-  .legend { font-size: 12px; color: var(--muted); }
-  .legend-item { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
-  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-
   .recommendation { background: rgba(63,185,80,0.08); border: 1px solid var(--weak);
                     border-radius: 6px; padding: 14px; margin-bottom: 14px; }
   .recommendation .big { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
@@ -111,22 +93,11 @@
            border-radius: 12px; cursor: pointer; user-select: none; }
   .check input { width: auto; margin: 0; }
 
-  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
-  .stat { background: #0d1117; border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
-  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
-  .stat .value { font-size: 22px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
-
-  .hist-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-               gap: 12px; margin-bottom: 16px; }
-  .hist-card { background: #0d1117; border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
-  .hist-card .title { font-size: 12px; color: var(--text); margin-bottom: 6px;
-                      font-family: ui-monospace, monospace; }
-  .hist-card .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  svg.hist { width: 100%; height: 90px; display: block; }
-  svg.hist rect { fill: var(--accent); fill-opacity: 0.55; }
-  svg.hist .axis { stroke: var(--line); }
-  svg.hist .axis-text { fill: var(--muted); font-size: 10px; font-family: ui-monospace, monospace; }
-  svg.hist .rec { stroke: var(--weak); stroke-width: 1.5; stroke-dasharray: 3,3; }
+  .grafana-cta { display: inline-flex; align-items: center; gap: 8px;
+                 background: rgba(88,166,255,0.10); border: 1px solid var(--accent);
+                 color: var(--accent); padding: 8px 14px; border-radius: 4px;
+                 font-weight: 600; text-decoration: none; margin-bottom: 14px; }
+  .grafana-cta:hover { background: rgba(88,166,255,0.18); }
 </style>
 </head>
 <body>
@@ -144,7 +115,7 @@
     <li id="step-1" class="active"><span class="step-num">1</span><span class="step-label">Upload</span></li>
     <li id="step-2"><span class="step-num">2</span><span class="step-label">Generate ground truth</span></li>
     <li id="step-3"><span class="step-num">3</span><span class="step-label">Evaluate routers</span></li>
-    <li id="step-4"><span class="step-num">4</span><span class="step-label">Pareto report</span></li>
+    <li id="step-4"><span class="step-num">4</span><span class="step-label">Eval report</span></li>
   </ol>
 
   <section class="panel" id="panel-upload">
@@ -215,45 +186,24 @@
   </section>
 
   <section class="panel" id="panel-report" style="display:none">
-    <h2>4 — pareto report</h2>
+    <h2>4 — eval report</h2>
     <div id="recommendation"></div>
 
-    <div class="stats-row">
-      <div class="stat"><div class="label">Questions</div><div class="value" id="stat-n">—</div></div>
-      <div class="stat"><div class="label">Weak-only accuracy</div><div class="value" id="stat-weak-acc">—</div></div>
-      <div class="stat"><div class="label">Strong-only accuracy</div><div class="value" id="stat-strong-acc">—</div></div>
-      <div class="stat"><div class="label">Best cascade savings</div><div class="value" id="stat-savings">—</div></div>
-    </div>
-
-    <h2 style="margin-top: 18px">router score distribution</h2>
-    <p class="muted" style="margin-top: -4px">
-      Where each router's uncertainty scores actually land. The dashed line marks the recommended threshold.
-      If all the mass is on one side of the line, escalation rate is 0% or 100% — that's why the Pareto
-      chart can collapse to a single point.
+    <a id="grafana-link" class="grafana-cta" href="http://localhost:3000/d/med-routing-eval" target="_blank">
+      Open Grafana — calibration, selective accuracy, savings →
+    </a>
+    <p class="muted" style="margin-top: -6px; margin-bottom: 14px">
+      Eval observations are pushed to Prometheus at the recommended threshold for each router,
+      so the dashboard reflects this run. Re-run eval to refresh.
     </p>
-    <div class="hist-grid" id="hist-grid"></div>
 
-    <div class="chart-wrap">
-      <svg class="chart" id="chart" viewBox="0 0 700 360" preserveAspectRatio="none"></svg>
-      <div>
-        <div style="margin-bottom: 12px">
-          <div class="legend">
-            <div class="legend-item"><span class="swatch" style="background: var(--accent)"></span>On Pareto frontier</div>
-            <div class="legend-item"><span class="swatch" style="background: var(--muted)"></span>Dominated configs</div>
-            <div class="legend-item"><span class="swatch" style="background: var(--weak)"></span>Recommended</div>
-            <div class="legend-item"><span class="swatch" style="background: var(--weak); opacity:0.4"></span>Weak-only baseline</div>
-            <div class="legend-item"><span class="swatch" style="background: var(--strong); opacity:0.4"></span>Strong-only baseline</div>
-          </div>
-        </div>
-        <div class="muted" style="font-size:11px">
-          Cascade configs in the lower-left of the chart (low cost, high accuracy) dominate. The frontier shows the best-accuracy point at each cost. Off-frontier configs are strictly worse.
-        </div>
-      </div>
-    </div>
-
-    <h2 style="margin-top: 24px">all configurations</h2>
+    <h2 style="margin-top: 18px">all configurations</h2>
     <table id="report-table">
-      <thead><tr><th>router</th><th>threshold</th><th>accuracy</th><th>escalation rate</th><th>cost (USD)</th><th>frontier</th></tr></thead>
+      <thead><tr>
+        <th>router</th><th>threshold</th><th>accuracy</th><th>escalation rate</th>
+        <th>kept-weak acc</th><th>escalated acc</th>
+        <th>cost (USD)</th><th>frontier</th>
+      </tr></thead>
       <tbody id="report-body"></tbody>
     </table>
   </section>
@@ -309,23 +259,16 @@ function resetDownstreamUI() {
   clearChildren($("threshold-list"));
   clearChildren($("recommendation"));
   clearChildren($("report-body"));
-  clearChildren($("hist-grid"));
   clearChildren($("gen-status"));
   clearChildren($("eval-status"));
   $("ds-name").textContent = "";
   $("ds-count").textContent = "";
-  $("stat-n").textContent = "—";
-  $("stat-weak-acc").textContent = "—";
-  $("stat-strong-acc").textContent = "—";
-  $("stat-savings").textContent = "—";
   $("generate-err").textContent = "";
   $("evaluate-err").textContent = "";
   $("btn-generate").disabled = false;
   $("btn-evaluate").disabled = false;
   $("gen-progress").style.display = "none";
   $("eval-progress").style.display = "none";
-  const chart = $("chart");
-  while (chart.firstChild) chart.removeChild(chart.firstChild);
   setStep(1);
 }
 
@@ -535,9 +478,6 @@ async function evaluate() {
 
 function renderReport(report) {
   $("panel-report").style.display = "block";
-  $("stat-n").textContent = String(report.n);
-  $("stat-weak-acc").textContent = (report.weak_only.accuracy * 100).toFixed(1) + "%";
-  $("stat-strong-acc").textContent = (report.strong_only.accuracy * 100).toFixed(1) + "%";
 
   const recBox = $("recommendation");
   clearChildren(recBox);
@@ -545,20 +485,16 @@ function renderReport(report) {
     const r = report.recommended;
     const savings = report.strong_only.cost_usd > 0
       ? (1 - r.cost_usd / report.strong_only.cost_usd) * 100 : 0;
-    $("stat-savings").textContent = savings.toFixed(0) + "%";
     const code = el("code", null, String(r.router));
     const big = el("div", { class: "big" }, "Recommended: ", code, ` at threshold ${Number(r.threshold).toFixed(2)}`);
     const meta = el("div", { class: "muted" },
-      `Accuracy ${(r.accuracy * 100).toFixed(1)}% · cost $${r.cost_usd.toFixed(5)} · ${(r.escalation_rate * 100).toFixed(0)}% escalation rate · saves ${savings.toFixed(0)}% vs always-strong`);
+      `n=${report.n} · accuracy ${(r.accuracy * 100).toFixed(1)}% · cost $${r.cost_usd.toFixed(5)} · ${(r.escalation_rate * 100).toFixed(0)}% escalation rate · saves ${savings.toFixed(0)}% vs always-strong`);
     const reason = el("div", { class: "reason" }, String(r.reason ?? ""));
     recBox.appendChild(el("div", { class: "recommendation" }, big, meta, reason));
   } else {
-    $("stat-savings").textContent = "—";
     recBox.appendChild(el("div", { class: "muted" },
-      "No configuration on the Pareto frontier beats the weak-only baseline. Try adding more thresholds or routers."));
+      "No configuration beats the weak-only baseline. Try more thresholds, more routers, or a harder eval set."));
   }
-  renderHistograms(report);
-  drawChart(report);
 
   const tbody = $("report-body");
   clearChildren(tbody);
@@ -566,167 +502,22 @@ function renderReport(report) {
   report.points.forEach((p, i) => {
     const frontierCell = el("td", null);
     if (frontierSet.has(i)) frontierCell.appendChild(makeBadge("weak", "YES"));
+    const fmtSel = (acc, n) => n
+      ? `${(acc * 100).toFixed(1)}% (n=${n})`
+      : "—";
     const tr = el("tr", null,
       el("td", null, String(p.router)),
       el("td", null, Number(p.threshold).toFixed(2)),
       el("td", null, (p.accuracy * 100).toFixed(1) + "%"),
       el("td", null, (p.escalation_rate * 100).toFixed(0) + "%"),
+      el("td", null, fmtSel(p.kept_weak_accuracy, p.kept_weak_n)),
+      el("td", null, fmtSel(p.escalated_accuracy, p.escalated_n)),
       el("td", null, "$" + Number(p.cost_usd).toFixed(5)),
       frontierCell,
     );
     tbody.appendChild(tr);
   });
   $("panel-report").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function renderHistograms(report) {
-  const grid = $("hist-grid");
-  clearChildren(grid);
-  const perQ = report.per_question || [];
-  if (!perQ.length) return;
-  const routers = report.routers || [];
-  const recBy = {};
-  if (report.recommended) recBy[report.recommended.router] = report.recommended.threshold;
-
-  for (const router of routers) {
-    const scores = perQ
-      .map(q => (q.router_scores || {})[router])
-      .filter(v => typeof v === "number" && isFinite(v));
-    if (!scores.length) continue;
-    const card = el("div", { class: "hist-card" });
-    card.appendChild(el("div", { class: "title" }, router));
-    card.appendChild(buildHistogramSvg(scores, recBy[router]));
-    const min = Math.min(...scores), max = Math.max(...scores);
-    const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-    card.appendChild(el("div", { class: "meta" },
-      `n=${scores.length} · min=${min.toFixed(3)} · mean=${mean.toFixed(3)} · max=${max.toFixed(3)}` +
-      (recBy[router] != null ? ` · rec τ=${Number(recBy[router]).toFixed(3)}` : "")));
-    grid.appendChild(card);
-  }
-}
-
-function buildHistogramSvg(scores, threshold) {
-  const W = 320, H = 90, m = { l: 4, r: 4, t: 4, b: 14 };
-  const pw = W - m.l - m.r;
-  const ph = H - m.t - m.b;
-  const svg = document.createElementNS(SVGNS, "svg");
-  svg.setAttribute("class", "hist");
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.setAttribute("preserveAspectRatio", "none");
-  // Always bin over [0, 1] so histograms are comparable across routers and the
-  // recommended-threshold marker has a fixed reference frame.
-  const N_BINS = 20;
-  const counts = new Array(N_BINS).fill(0);
-  for (const s of scores) {
-    const v = Math.max(0, Math.min(1 - 1e-9, s));
-    counts[Math.min(N_BINS - 1, Math.floor(v * N_BINS))]++;
-  }
-  const maxC = Math.max(...counts, 1);
-  const bw = pw / N_BINS;
-  for (let i = 0; i < N_BINS; i++) {
-    const h = (counts[i] / maxC) * ph;
-    const r = document.createElementNS(SVGNS, "rect");
-    r.setAttribute("x", String(m.l + i * bw + 0.5));
-    r.setAttribute("y", String(m.t + ph - h));
-    r.setAttribute("width", String(Math.max(0, bw - 1)));
-    r.setAttribute("height", String(h));
-    svg.appendChild(r);
-  }
-  // x axis baseline
-  const ax = document.createElementNS(SVGNS, "line");
-  ax.setAttribute("class", "axis");
-  ax.setAttribute("x1", String(m.l)); ax.setAttribute("x2", String(m.l + pw));
-  ax.setAttribute("y1", String(m.t + ph)); ax.setAttribute("y2", String(m.t + ph));
-  svg.appendChild(ax);
-  for (const tick of [0, 0.25, 0.5, 0.75, 1]) {
-    const x = m.l + tick * pw;
-    const t = document.createElementNS(SVGNS, "text");
-    t.setAttribute("class", "axis-text");
-    t.setAttribute("x", String(x)); t.setAttribute("y", String(H - 2));
-    t.setAttribute("text-anchor", tick === 0 ? "start" : tick === 1 ? "end" : "middle");
-    t.appendChild(document.createTextNode(tick.toFixed(2)));
-    svg.appendChild(t);
-  }
-  if (threshold != null && threshold >= 0 && threshold <= 1.001) {
-    const tx = m.l + Math.min(1, threshold) * pw;
-    const ln = document.createElementNS(SVGNS, "line");
-    ln.setAttribute("class", "rec");
-    ln.setAttribute("x1", String(tx)); ln.setAttribute("x2", String(tx));
-    ln.setAttribute("y1", String(m.t)); ln.setAttribute("y2", String(m.t + ph));
-    svg.appendChild(ln);
-  }
-  return svg;
-}
-
-const SVGNS = "http://www.w3.org/2000/svg";
-function svgEl(tag, attrs, text) {
-  const e = document.createElementNS(SVGNS, tag);
-  if (attrs) for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
-  if (text != null) e.appendChild(document.createTextNode(String(text)));
-  return e;
-}
-
-function drawChart(report) {
-  const svg = $("chart");
-  const W = 700, H = 360, m = { l: 50, r: 18, t: 14, b: 36 };
-  const pw = W - m.l - m.r;
-  const ph = H - m.t - m.b;
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-  const allCosts = report.points.map(p => p.cost_usd).concat([report.weak_only.cost_usd, report.strong_only.cost_usd]);
-  const allAcc = report.points.map(p => p.accuracy).concat([report.weak_only.accuracy, report.strong_only.accuracy]);
-  const xMin = 0;
-  const xMax = (Math.max(...allCosts) * 1.05) || 1;
-  const yMin = Math.max(0, Math.min(...allAcc) - 0.05);
-  const yMax = Math.min(1, Math.max(...allAcc) + 0.05);
-
-  const xs = (v) => m.l + (v - xMin) / (xMax - xMin) * pw;
-  const ys = (v) => m.t + (1 - (v - yMin) / (yMax - yMin)) * ph;
-
-  for (let i = 0; i <= 4; i++) {
-    const y = m.t + (i / 4) * ph;
-    svg.appendChild(svgEl("line", { class: "grid", x1: m.l, y1: y, x2: m.l + pw, y2: y }));
-    const v = yMax - (i / 4) * (yMax - yMin);
-    svg.appendChild(svgEl("text", { class: "axis-text", x: m.l - 8, y: y + 4, "text-anchor": "end" }, (v * 100).toFixed(0) + "%"));
-  }
-  for (let i = 0; i <= 4; i++) {
-    const x = m.l + (i / 4) * pw;
-    svg.appendChild(svgEl("line", { class: "grid", x1: x, y1: m.t, x2: x, y2: m.t + ph }));
-    const v = xMin + (i / 4) * (xMax - xMin);
-    svg.appendChild(svgEl("text", { class: "axis-text", x, y: m.t + ph + 18, "text-anchor": "middle" }, "$" + v.toFixed(4)));
-  }
-  svg.appendChild(svgEl("line", { class: "axis", x1: m.l, y1: m.t + ph, x2: m.l + pw, y2: m.t + ph }));
-  svg.appendChild(svgEl("line", { class: "axis", x1: m.l, y1: m.t, x2: m.l, y2: m.t + ph }));
-  svg.appendChild(svgEl("text", { class: "axis-text", x: m.l + pw / 2, y: H - 4, "text-anchor": "middle" }, "cost (USD, total over dataset)"));
-  svg.appendChild(svgEl("text", { class: "axis-text", x: 10, y: m.t + ph / 2, transform: `rotate(-90 10 ${m.t + ph / 2})`, "text-anchor": "middle" }, "accuracy (judged by gpt-4o-mini)"));
-
-  const wy = ys(report.weak_only.accuracy);
-  const sy = ys(report.strong_only.accuracy);
-  svg.appendChild(svgEl("line", { class: "baseline weak", x1: m.l, y1: wy, x2: m.l + pw, y2: wy }));
-  svg.appendChild(svgEl("text", { class: "axis-text", x: m.l + pw - 6, y: wy - 4, "text-anchor": "end", fill: "var(--weak)" },
-    `weak only ${(report.weak_only.accuracy * 100).toFixed(0)}%`));
-  svg.appendChild(svgEl("line", { class: "baseline strong", x1: m.l, y1: sy, x2: m.l + pw, y2: sy }));
-  svg.appendChild(svgEl("text", { class: "axis-text", x: m.l + pw - 6, y: sy - 4, "text-anchor": "end", fill: "var(--strong)" },
-    `strong only ${(report.strong_only.accuracy * 100).toFixed(0)}%`));
-
-  const frontier = report.pareto_indices
-    .map(i => report.points[i])
-    .sort((a, b) => a.cost_usd - b.cost_usd);
-  if (frontier.length > 1) {
-    const d = "M " + frontier.map(p => `${xs(p.cost_usd)},${ys(p.accuracy)}`).join(" L ");
-    svg.appendChild(svgEl("path", { class: "frontier-line", d }));
-  }
-
-  const recommendedIdx = report.recommended ? report.recommended.index : -1;
-  const frontierSet = new Set(report.pareto_indices);
-  report.points.forEach((p, i) => {
-    const cls = (i === recommendedIdx) ? "pt recommended" : (frontierSet.has(i) ? "pt frontier" : "pt");
-    const r = (i === recommendedIdx) ? 8 : (frontierSet.has(i) ? 5 : 3.5);
-    const c = svgEl("circle", { class: cls, cx: xs(p.cost_usd), cy: ys(p.accuracy), r });
-    c.appendChild(svgEl("title", null,
-      `${p.router} @ ${Number(p.threshold).toFixed(2)} — accuracy ${(p.accuracy * 100).toFixed(1)}%, cost $${p.cost_usd.toFixed(5)}, esc ${(p.escalation_rate * 100).toFixed(0)}%`));
-    svg.appendChild(c);
-  });
 }
 
 $("file").addEventListener("change", async (e) => {

@@ -539,6 +539,7 @@ async def dataset_evaluate(ds_id: str, payload: DatasetEvaluateRequest) -> dict[
             judge_model=s.judge_model,
             store=app.state.dataset_store,
             judge_cache_path=app.state.judge_cache_path,
+            aggregator=app.state.aggregator,
         )
         # Persist the completion cache too — biggest win for replay speed.
         app.state.cache.save(app.state.completion_cache_path)

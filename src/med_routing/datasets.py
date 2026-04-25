@@ -230,9 +230,6 @@ class EvalReport:
     weak_only: dict[str, Any]
     strong_only: dict[str, Any]
     judge_model: str
-    # Per-question raw values: lets the UI render score histograms, calibration,
-    # and selective accuracy without re-running the sweep.
-    per_question: list[dict[str, Any]] = field(default_factory=list)
     completed_at: float = field(default_factory=time.time)
 
 
@@ -367,8 +364,15 @@ async def run_eval_sweep(
     judge_model: str,
     store: "DatasetStore | None" = None,
     judge_cache_path: Path | str | None = None,
+    aggregator: object | None = None,
 ) -> EvalReport:
-    """Sweep thresholds for each requested router and return a Pareto report."""
+    """Sweep thresholds for each requested router and return a Pareto report.
+
+    If `aggregator` is provided, the per-router observations at the recommended
+    (or best-frontier) threshold are pushed into it so Grafana panels reflect
+    this eval. Without that, the live dashboard is empty for batch evals since
+    the cascade endpoint isn't on the path.
+    """
     if not dataset.rows:
         raise ValueError("Empty dataset")
     sweep_routers = {n: routers[n] for n in router_names if n in routers}
@@ -413,6 +417,8 @@ async def run_eval_sweep(
             n_correct = 0
             n_escalated = 0
             total_cost = 0.0
+            kept_correct = kept_total = 0
+            esc_correct = esc_total = 0
             for pq in precomputed:
                 score = pq.router_scores.get(router_name, 1.0)
                 escalated = score >= t
@@ -420,9 +426,13 @@ async def run_eval_sweep(
                     n_escalated += 1
                     n_correct += int(pq.strong_correct)
                     total_cost += pq.weak_cost + pq.strong_cost
+                    esc_total += 1
+                    esc_correct += int(pq.strong_correct)
                 else:
                     n_correct += int(pq.weak_correct)
                     total_cost += pq.weak_cost
+                    kept_total += 1
+                    kept_correct += int(pq.weak_correct)
             n = len(precomputed)
             points.append({
                 "router": router_name,
@@ -431,6 +441,10 @@ async def run_eval_sweep(
                 "escalation_rate": n_escalated / n if n else 0.0,
                 "cost_usd": total_cost,
                 "n": n,
+                "kept_weak_n": kept_total,
+                "kept_weak_accuracy": (kept_correct / kept_total) if kept_total else None,
+                "escalated_n": esc_total,
+                "escalated_accuracy": (esc_correct / esc_total) if esc_total else None,
             })
 
     # Baselines: always-weak and always-strong on the same data.
@@ -471,18 +485,6 @@ async def run_eval_sweep(
     # earlier reports that had a flat list).
     union_thresholds = sorted({t for ts in thresholds_by_router.values() for t in ts})
 
-    per_question = [
-        {
-            "qid": pq.qid,
-            "weak_correct": pq.weak_correct,
-            "strong_correct": pq.strong_correct,
-            "weak_cost": pq.weak_cost,
-            "strong_cost": pq.strong_cost,
-            "router_scores": {k: float(v) for k, v in pq.router_scores.items()},
-        }
-        for pq in precomputed
-    ]
-
     report = EvalReport(
         dataset_id=dataset.id,
         n=len(precomputed),
@@ -495,7 +497,6 @@ async def run_eval_sweep(
         weak_only=weak_only,
         strong_only=strong_only,
         judge_model=judge_model,
-        per_question=per_question,
     )
     dataset.last_report = {
         "n": report.n,
@@ -508,7 +509,6 @@ async def run_eval_sweep(
         "weak_only": report.weak_only,
         "strong_only": report.strong_only,
         "judge_model": report.judge_model,
-        "per_question": report.per_question,
         "completed_at": report.completed_at,
     }
     dataset.status = "evaluated"
@@ -516,7 +516,68 @@ async def run_eval_sweep(
         store.save(dataset)
     if judge_cache_path is not None:
         judge.save(judge_cache_path)
+
+    if aggregator is not None:
+        _push_eval_to_aggregator(
+            aggregator=aggregator,
+            precomputed=precomputed,
+            points=points,
+            pareto=pareto,
+            recommended=recommended,
+            router_names=[n for n in router_names if n in sweep_routers],
+        )
+
     return report
+
+
+def _push_eval_to_aggregator(
+    *,
+    aggregator: object,
+    precomputed: list["_PerQuestion"],
+    points: list[dict[str, Any]],
+    pareto: list[int],
+    recommended: dict[str, Any] | None,
+    router_names: list[str],
+) -> None:
+    """Push per-question observations into the live aggregator.
+
+    Pick one threshold per router (the recommended config if it picked this
+    router, else the highest-accuracy frontier point for the router). Then
+    feed each (question, router) outcome at that threshold so Grafana's
+    instant gauges (ECE, kept-weak/escalated accuracy, calibration bins)
+    reflect this eval. `persist=False` keeps these observations out of the
+    SQLite store so a server restart doesn't replay them and double-count.
+    """
+    frontier = set(pareto)
+    rec_router = recommended.get("router") if recommended else None
+    rec_threshold = recommended.get("threshold") if recommended else None
+
+    for router in router_names:
+        if rec_router == router and rec_threshold is not None:
+            tau = rec_threshold
+        else:
+            cands = [p for i, p in enumerate(points) if p["router"] == router and i in frontier]
+            if not cands:
+                cands = [p for p in points if p["router"] == router]
+            if not cands:
+                continue
+            cands.sort(key=lambda p: (-p["accuracy"], p["cost_usd"]))
+            tau = cands[0]["threshold"]
+
+        for pq in precomputed:
+            score = float(pq.router_scores.get(router, 1.0))
+            escalated = score >= tau
+            correct = pq.strong_correct if escalated else pq.weak_correct
+            try:
+                aggregator.observe(
+                    router=router,
+                    score=score,
+                    escalated=escalated,
+                    correct=bool(correct),
+                    persist=False,
+                )
+            except Exception:
+                pass
 
 
 # ---------- Disk persistence ----------
