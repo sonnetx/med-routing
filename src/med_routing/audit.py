@@ -73,6 +73,15 @@ class AuditLogger:
         with self._lock:
             return list(self._recent)[-limit:]
 
+    def restore_recent(self, rows: list[dict[str, Any]]) -> None:
+        """Pre-populate the in-memory ring buffer from persisted rows. Used at
+        startup so the audit drawer in the frontend reflects historical data
+        instead of being empty until the next live request. Does NOT re-write
+        to JSONL or the DB — those already have these rows."""
+        with self._lock:
+            for row in rows:
+                self._recent.append(row)
+
     def close(self) -> None:
         with self._lock:
             if self._fp is not None:

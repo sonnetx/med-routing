@@ -74,10 +74,29 @@ async def lifespan(app: FastAPI):
     audit = AuditLogger(root=Path(s.audit_dir), store=store)
     app.state.controller = CascadeController(client=client, routers=routers, cache=cache, audit=audit)
     app.state.routers = routers
-    app.state.aggregator = EvalAggregator(store=store)
+    aggregator = EvalAggregator(store=store)
+    app.state.aggregator = aggregator
     app.state.audit = audit
     app.state.store = store
     app.state.medmcqa_pool = None  # lazily filled on first /v1/eval/sample
+
+    # Replay historical DB rows into Prometheus counters/histograms/gauges so
+    # dashboard panels reflect cumulative state across container restarts. The
+    # JSONL audit log stays the durable source of truth; this just keeps the
+    # in-process metrics aligned with what's already on disk.
+    try:
+        from .replay import replay_metrics_from_store
+
+        n = replay_metrics_from_store(store, aggregator, audit=audit)
+        import logging
+        logging.getLogger(__name__).info(
+            "replayed metrics from store: %d decisions, %d eval rows",
+            n["decisions"], n["eval_rows"],
+        )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("metrics replay failed: %s", exc)
+
     yield
     audit.close()
 

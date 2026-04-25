@@ -50,6 +50,7 @@ class EvalAggregator:
         escalated: bool,
         correct: bool,
         subject: str | None = None,
+        persist: bool = True,
     ) -> dict[str, float]:
         t = self._t[router]
         t.total += 1
@@ -85,7 +86,7 @@ class EvalAggregator:
         ece = self._compute_ece(t)
         ECE.labels(router=router).set(ece)
 
-        if self._store is not None:
+        if persist and self._store is not None:
             try:
                 self._store.insert_eval_row(
                     router=router, score=score, escalated=escalated,
