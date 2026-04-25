@@ -203,18 +203,27 @@ class CachedJudge:
 
 
 @dataclass
-class _PerQuestion:
-    """Pre-computed per-question values that don't depend on threshold."""
+class _TierOutput:
+    """One tier's answer + cost + judged correctness for a single question."""
+    tier_name: str
+    model: str
+    answer: str
+    cost: float
+    correct: bool
 
+
+@dataclass
+class _PerQuestion:
+    """Pre-computed per-question values that don't depend on threshold.
+
+    `tiers[i]` is the i'th tier's deterministic answer + judged correctness.
+    `router_scores[name]` is mapped per-tier-index → score; the score that
+    decides escalation at tier i is taken against tier i's completion.
+    """
     qid: str
-    weak_answer: str
-    strong_answer: str
-    weak_cost: float
-    strong_cost: float
-    weak_correct: bool
-    strong_correct: bool
-    # router_name -> uncertainty score for this question's weak answer
-    router_scores: dict[str, float] = field(default_factory=dict)
+    tiers: list[_TierOutput] = field(default_factory=list)
+    # router_name -> list[float] of per-tier uncertainty scores
+    router_scores: dict[str, list[float]] = field(default_factory=dict)
 
 
 @dataclass
@@ -227,6 +236,10 @@ class EvalReport:
     points: list[dict[str, Any]]
     pareto_indices: list[int]
     recommended: dict[str, Any] | None
+    # One baseline per tier ("always tier-0", "always tier-1", ...).
+    tier_baselines: list[dict[str, Any]]
+    # Convenience aliases kept for the existing UI's "weak only" / "strong only"
+    # callouts; both populated from `tier_baselines[0]` / `tier_baselines[-1]`.
     weak_only: dict[str, Any]
     strong_only: dict[str, Any]
     judge_model: str
@@ -276,81 +289,64 @@ async def _precompute_one(
     routers: dict[str, UncertaintyRouter],
     judge: CachedJudge,
 ) -> _PerQuestion:
-    """Run weak + strong + each router scoring + judge, all once."""
+    """For each tier: deterministic answer + per-router uncertainty + judged correctness."""
     s = get_settings()
     messages = [{"role": "user", "content": row.question}]
-
-    # Weak call (deterministic, with logprobs so predictive_entropy could see them
-    # if we ever included that router in the sweep).
-    weak_cached = cache.get(messages=messages, model=s.weak_model, temperature=0.0, n=1)
-    if weak_cached is None:
-        comps = await client.complete(
-            model=s.weak_model,
-            messages=messages,
-            tier="weak",
-            temperature=0.0,
-            max_tokens=256,
-            logprobs=True,
-            top_logprobs=5,
-        )
-        weak_cached = comps[0]
-        cache.set(messages=messages, model=s.weak_model, temperature=0.0, n=1, value=weak_cached)
-    weak = weak_cached
-
-    # Strong call.
-    strong_cached = cache.get(messages=messages, model=s.strong_model, temperature=0.0, n=1)
-    if strong_cached is None:
-        comps = await client.complete(
-            model=s.strong_model,
-            messages=messages,
-            tier="strong",
-            temperature=0.0,
-            max_tokens=256,
-        )
-        strong_cached = comps[0]
-        cache.set(messages=messages, model=s.strong_model, temperature=0.0, n=1, value=strong_cached)
-    strong = strong_cached
-
-    # Sampler shared by routers that need it (e.g. semantic_entropy_embed).
-    async def sampler(*, n: int, temperature: float):
-        cached = cache.get(messages=messages, model=s.weak_model, temperature=temperature, n=n)
-        if cached is not None:
-            return cached
-        samples = await client.complete(
-            model=s.weak_model,
-            messages=messages,
-            tier="weak",
-            temperature=temperature,
-            max_tokens=256,
-            n=n,
-        )
-        cache.set(messages=messages, model=s.weak_model, temperature=temperature, n=n, value=samples)
-        return samples
-
-    router_scores: dict[str, float] = {}
-    for name, router in routers.items():
-        try:
-            rs = await router.score(messages=messages, weak=weak, sampler=sampler)
-            router_scores[name] = rs.score
-        except Exception as exc:
-            # Demo robustness: if a router blows up, mark its score as 1.0 so it
-            # always escalates rather than crashing the whole sweep.
-            router_scores[name] = 1.0
-
     reference = row.ground_truth or ""
-    weak_correct = await judge.judge(question=row.question, predicted=weak.text, reference=reference) if reference else False
-    strong_correct = await judge.judge(question=row.question, predicted=strong.text, reference=reference) if reference else False
 
-    return _PerQuestion(
-        qid=row.qid,
-        weak_answer=weak.text,
-        strong_answer=strong.text,
-        weak_cost=weak.cost,
-        strong_cost=strong.cost,
-        weak_correct=weak_correct,
-        strong_correct=strong_correct,
-        router_scores=router_scores,
-    )
+    tier_outs: list[_TierOutput] = []
+    router_scores: dict[str, list[float]] = {name: [] for name in routers}
+
+    for tier in s.tiers:
+        comp_cached = cache.get(messages=messages, model=tier.model, temperature=0.0, n=1)
+        if comp_cached is None:
+            comps = await client.complete(
+                model=tier.model,
+                messages=messages,
+                tier=tier.name,
+                temperature=0.0,
+                max_tokens=256,
+                logprobs=True,
+                top_logprobs=5,
+            )
+            comp_cached = comps[0]
+            cache.set(messages=messages, model=tier.model, temperature=0.0, n=1, value=comp_cached)
+        comp = comp_cached
+
+        async def sampler(*, n: int, temperature: float, _tier_model=tier.model, _tier_name=tier.name):
+            cached = cache.get(messages=messages, model=_tier_model, temperature=temperature, n=n)
+            if cached is not None:
+                return cached
+            samples = await client.complete(
+                model=_tier_model,
+                messages=messages,
+                tier=_tier_name,
+                temperature=temperature,
+                max_tokens=256,
+                n=n,
+            )
+            cache.set(messages=messages, model=_tier_model, temperature=temperature, n=n, value=samples)
+            return samples
+
+        for name, router in routers.items():
+            try:
+                rs = await router.score(messages=messages, weak=comp, sampler=sampler)
+                router_scores[name].append(float(rs.score))
+            except Exception:
+                # Demo robustness: a router blowup at one tier doesn't kill the
+                # whole sweep — record a worst-case score so it always escalates.
+                router_scores[name].append(1.0)
+
+        correct = (
+            await judge.judge(question=row.question, predicted=comp.text, reference=reference)
+            if reference else False
+        )
+        tier_outs.append(_TierOutput(
+            tier_name=tier.name, model=tier.model, answer=comp.text,
+            cost=comp.cost, correct=correct,
+        ))
+
+    return _PerQuestion(qid=row.qid, tiers=tier_outs, router_scores=router_scores)
 
 
 async def run_eval_sweep(
@@ -394,69 +390,94 @@ async def run_eval_sweep(
         )
         precomputed.append(pq)
 
-    # Build per-router threshold lists. Empty input list = auto-mode: each
-    # router gets thresholds sampled from its own observed score distribution.
-    # Explicit input applies the same list to every router (legacy behavior).
+    # Auto-mode samples thresholds from each router's observed score distribution
+    # at tier 0 (the most informative — escalation decisions start there). An
+    # explicit `thresholds` list is applied to every router as-is.
     auto_mode = not thresholds
     thresholds_by_router: dict[str, list[float]] = {}
     for router_name in router_names:
         if router_name not in sweep_routers:
             continue
         if auto_mode:
-            scores = [pq.router_scores.get(router_name, 1.0) for pq in precomputed]
+            scores = [
+                (pq.router_scores.get(router_name) or [1.0])[0]
+                for pq in precomputed
+            ]
             thresholds_by_router[router_name] = auto_thresholds_for_router(scores)
         else:
             thresholds_by_router[router_name] = sorted(set(thresholds))
 
-    # In-memory threshold sweep: cheap.
+    # Simulate the cascade in-memory: at threshold t, walk tiers cheap→expensive.
+    # The first tier whose router score < t commits. Last tier commits no matter
+    # what. Cost = sum of every visited tier's main-call cost.
+    n_tiers = len(precomputed[0].tiers) if precomputed else 0
     points: list[dict[str, Any]] = []
     for router_name in router_names:
         if router_name not in sweep_routers:
             continue
         for t in thresholds_by_router[router_name]:
             n_correct = 0
-            n_escalated = 0
+            tier_commits = [0] * n_tiers
             total_cost = 0.0
-            kept_correct = kept_total = 0
-            esc_correct = esc_total = 0
             for pq in precomputed:
-                score = pq.router_scores.get(router_name, 1.0)
-                escalated = score >= t
-                if escalated:
-                    n_escalated += 1
-                    n_correct += int(pq.strong_correct)
-                    total_cost += pq.weak_cost + pq.strong_cost
-                    esc_total += 1
-                    esc_correct += int(pq.strong_correct)
-                else:
-                    n_correct += int(pq.weak_correct)
-                    total_cost += pq.weak_cost
-                    kept_total += 1
-                    kept_correct += int(pq.weak_correct)
+                scores = pq.router_scores.get(router_name) or [1.0] * n_tiers
+                committed_at = n_tiers - 1
+                for ti in range(n_tiers):
+                    total_cost += pq.tiers[ti].cost
+                    if scores[ti] < t or ti == n_tiers - 1:
+                        committed_at = ti
+                        break
+                tier_commits[committed_at] += 1
+                n_correct += int(pq.tiers[committed_at].correct)
             n = len(precomputed)
-            points.append({
+            escalations = n - tier_commits[0]
+            point: dict[str, Any] = {
                 "router": router_name,
                 "threshold": round(t, 4),
                 "accuracy": n_correct / n if n else 0.0,
-                "escalation_rate": n_escalated / n if n else 0.0,
+                "escalation_rate": escalations / n if n else 0.0,
                 "cost_usd": total_cost,
                 "n": n,
-                "kept_weak_n": kept_total,
-                "kept_weak_accuracy": (kept_correct / kept_total) if kept_total else None,
-                "escalated_n": esc_total,
-                "escalated_accuracy": (esc_correct / esc_total) if esc_total else None,
-            })
+                "tier_commits": tier_commits,
+            }
+            # Convenience aliases for the existing UI: tier-0 commits ≈ "kept weak"
+            # accuracy; commits past tier 0 ≈ "escalated" accuracy.
+            kept_total = tier_commits[0]
+            kept_correct = sum(
+                1 for pq in precomputed
+                if (pq.router_scores.get(router_name) or [1.0])[0] < t and pq.tiers[0].correct
+            )
+            esc_total = n - kept_total
+            esc_correct = n_correct - kept_correct
+            point["kept_weak_n"] = kept_total
+            point["kept_weak_accuracy"] = (kept_correct / kept_total) if kept_total else None
+            point["escalated_n"] = esc_total
+            point["escalated_accuracy"] = (esc_correct / esc_total) if esc_total else None
+            points.append(point)
 
-    # Baselines: always-weak and always-strong on the same data.
+    # Per-tier baselines: always-tier-i for i ∈ tiers. Cumulative cost up to
+    # tier i (since reaching tier i requires paying for tiers 0..i).
+    s_settings = get_settings()
+    tier_baselines: list[dict[str, Any]] = []
+    for ti, tier in enumerate(s_settings.tiers):
+        cum_cost = sum(sum(pq.tiers[k].cost for k in range(ti + 1)) for pq in precomputed)
+        tier_baselines.append({
+            "tier_index": ti,
+            "tier_name": tier.name,
+            "model": tier.model,
+            "label": f"always tier-{ti} ({tier.model})",
+            "accuracy": sum(1 for pq in precomputed if pq.tiers[ti].correct) / len(precomputed),
+            "cost_usd": cum_cost,
+        })
     weak_only = {
-        "label": "weak only (gpt-4o-mini)",
-        "accuracy": sum(1 for pq in precomputed if pq.weak_correct) / len(precomputed),
-        "cost_usd": sum(pq.weak_cost for pq in precomputed),
+        "label": f"weak only ({tier_baselines[0]['model']})",
+        "accuracy": tier_baselines[0]["accuracy"],
+        "cost_usd": tier_baselines[0]["cost_usd"],
     }
     strong_only = {
-        "label": "strong only (gpt-4o)",
-        "accuracy": sum(1 for pq in precomputed if pq.strong_correct) / len(precomputed),
-        "cost_usd": sum(pq.strong_cost for pq in precomputed),
+        "label": f"strong only ({tier_baselines[-1]['model']})",
+        "accuracy": tier_baselines[-1]["accuracy"],
+        "cost_usd": tier_baselines[-1]["cost_usd"],
     }
 
     pareto = _pareto_front(points)

@@ -22,6 +22,24 @@ class Processor:
 _UNKNOWN = Processor(name="unknown", entity="unknown", region="unknown")
 
 DEFAULT_REGISTRY: dict[str, Processor] = {
+    "gpt-5.4-nano": Processor(
+        name="openai-gpt-5.4-nano",
+        entity="OpenAI, Inc.",
+        region="US",
+        dpa_ref="OpenAI DPA 2024",
+    ),
+    "gpt-5.4-mini": Processor(
+        name="openai-gpt-5.4-mini",
+        entity="OpenAI, Inc.",
+        region="US",
+        dpa_ref="OpenAI DPA 2024",
+    ),
+    "gpt-5.4": Processor(
+        name="openai-gpt-5.4",
+        entity="OpenAI, Inc.",
+        region="US",
+        dpa_ref="OpenAI DPA 2024",
+    ),
     "gpt-4o-mini": Processor(
         name="openai-gpt-4o-mini",
         entity="OpenAI, Inc.",

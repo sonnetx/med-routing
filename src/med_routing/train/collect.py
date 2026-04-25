@@ -35,7 +35,7 @@ async def _weak_with_logprobs(
     completions = await client.complete(
         model=model,
         messages=messages,
-        tier="weak",
+        tier=get_settings().tiers[0].name,
         temperature=0.0,
         max_tokens=64,
         logprobs=True,
@@ -55,7 +55,7 @@ async def _sample_n(
     return await client.complete(
         model=model,
         messages=messages,
-        tier="weak",
+        tier=get_settings().tiers[0].name,
         temperature=temperature,
         max_tokens=64,
         n=n,
@@ -141,7 +141,7 @@ async def _process_item(
             strong_results = await client.complete(
                 model=s.strong_model,
                 messages=messages,
-                tier="strong",
+                tier=get_settings().tiers[-1].name,
                 temperature=0.0,
                 max_tokens=64,
             )

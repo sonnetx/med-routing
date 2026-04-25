@@ -62,7 +62,29 @@ def decision_to_audit_event(row: dict[str, Any]) -> dict[str, Any]:
             "requestor": False,
             "name": "med-routing",
         },
-        {
+    ]
+
+    # Prefer the 3-tier `tier_chain` JSON. Fall back to legacy weak/strong
+    # columns so AuditEvents continue to render for rows written by the older
+    # 2-tier code.
+    chain = row.get("tier_chain") or []
+    if chain:
+        for visit in chain:
+            agents.append({
+                "type": _ROLE_DATAPROCESSOR,
+                "who": {"display": f"{visit.get('entity','')} — {visit.get('processor','')}".strip(" —")},
+                "requestor": False,
+                "name": str(visit.get("processor") or ""),
+                "altId": str(visit.get("dpa_ref") or ""),
+                "extension": [
+                    {"url": "urn:med-routing:region", "valueString": str(visit.get("region") or "")},
+                    {"url": "urn:med-routing:tier", "valueString": str(visit.get("tier_name") or "")},
+                    {"url": "urn:med-routing:tier-index", "valueString": str(visit.get("tier_index"))},
+                    {"url": "urn:med-routing:model", "valueString": str(visit.get("model") or "")},
+                ],
+            })
+    else:
+        agents.append({
             "type": _ROLE_DATAPROCESSOR,
             "who": {"display": f"{row.get('weak_entity', '')} — {row.get('weak_processor', '')}".strip(" —")},
             "requestor": False,
@@ -72,11 +94,9 @@ def decision_to_audit_event(row: dict[str, Any]) -> dict[str, Any]:
                 {"url": "urn:med-routing:region", "valueString": str(row.get("weak_region") or "")},
                 {"url": "urn:med-routing:tier", "valueString": "weak"},
             ],
-        },
-    ]
-    if escalated and row.get("strong_processor"):
-        agents.append(
-            {
+        })
+        if escalated and row.get("strong_processor"):
+            agents.append({
                 "type": _ROLE_DATAPROCESSOR,
                 "who": {"display": f"strong-tier — {row.get('strong_processor')}"},
                 "requestor": False,
@@ -85,8 +105,7 @@ def decision_to_audit_event(row: dict[str, Any]) -> dict[str, Any]:
                     {"url": "urn:med-routing:region", "valueString": str(row.get("strong_region") or "")},
                     {"url": "urn:med-routing:tier", "valueString": "strong"},
                 ],
-            }
-        )
+            })
 
     entity = {
         "what": {
@@ -112,6 +131,7 @@ def decision_to_audit_event(row: dict[str, Any]) -> dict[str, Any]:
             _detail("score", row.get("score")),
             _detail("threshold", row.get("threshold")),
             _detail("escalated", "true" if escalated else "false"),
+            _detail("final_tier_index", row.get("final_tier_index")),
             _detail("final_model", row.get("final_model")),
             _detail("home_region", row.get("home_region")),
             _detail("regions_touched", ",".join(row.get("regions_touched") or [])),
@@ -133,7 +153,11 @@ def decision_to_audit_event(row: dict[str, Any]) -> dict[str, Any]:
         "action": "E",  # Execute
         "recorded": recorded,
         "outcome": "0",  # success — failures would be 4 (minor) / 8 (serious) / 12 (major)
-        "outcomeDesc": "escalated_to_strong" if escalated else "kept_weak",
+        "outcomeDesc": (
+            f"committed_at_tier_{row.get('final_tier_index')}"
+            if row.get("final_tier_index") is not None
+            else ("escalated_to_strong" if escalated else "kept_weak")
+        ),
         "purposeOfEvent": [
             {
                 "coding": [

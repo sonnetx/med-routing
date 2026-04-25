@@ -57,26 +57,40 @@ def replay_metrics_from_store(
         if cf_cost:
             COUNTERFACTUAL_COST_BY_ROUTER.labels(router=router).inc(cf_cost)
 
+        chain = d.get("tier_chain") or []
         latency_ms = d.get("latency_ms")
-        if latency_ms:
-            tier = "strong" if escalated else "weak"
-            LATENCY_SECONDS.labels(router=router, tier=tier).observe(latency_ms / 1000.0)
-
-        weak_proc = d.get("weak_processor")
-        weak_region = d.get("weak_region") or "unknown"
-        weak_model = d.get("weak_model") or ""
-        if weak_proc:
-            entity = get_processor(weak_model).entity if weak_model else "unknown"
-            PROCESSOR_CALLS_TOTAL.labels(processor=weak_proc, entity=entity, region=weak_region).inc()
-
-        if escalated and d.get("strong_processor"):
-            strong_model = d.get("strong_model") or ""
-            entity = get_processor(strong_model).entity if strong_model else "unknown"
-            PROCESSOR_CALLS_TOTAL.labels(
-                processor=d["strong_processor"],
-                entity=entity,
-                region=d.get("strong_region") or "unknown",
-            ).inc()
+        if chain:
+            # 3-tier replay: latency labelled by the final tier's name; emit
+            # one PROCESSOR_CALLS_TOTAL increment per tier visited.
+            final = chain[-1]
+            tier_name = final.get("tier_name") or "unknown"
+            if latency_ms:
+                LATENCY_SECONDS.labels(router=router, tier=tier_name).observe(latency_ms / 1000.0)
+            for visit in chain:
+                proc = visit.get("processor")
+                region = visit.get("region") or "unknown"
+                entity = visit.get("entity") or get_processor(visit.get("model") or "").entity
+                if proc:
+                    PROCESSOR_CALLS_TOTAL.labels(processor=proc, entity=entity, region=region).inc()
+        else:
+            # Legacy 2-tier replay path; rows written before the migration.
+            if latency_ms:
+                tier = "strong" if escalated else "weak"
+                LATENCY_SECONDS.labels(router=router, tier=tier).observe(latency_ms / 1000.0)
+            weak_proc = d.get("weak_processor")
+            weak_region = d.get("weak_region") or "unknown"
+            weak_model = d.get("weak_model") or ""
+            if weak_proc:
+                entity = get_processor(weak_model).entity if weak_model else "unknown"
+                PROCESSOR_CALLS_TOTAL.labels(processor=weak_proc, entity=entity, region=weak_region).inc()
+            if escalated and d.get("strong_processor"):
+                strong_model = d.get("strong_model") or ""
+                entity = get_processor(strong_model).entity if strong_model else "unknown"
+                PROCESSOR_CALLS_TOTAL.labels(
+                    processor=d["strong_processor"],
+                    entity=entity,
+                    region=d.get("strong_region") or "unknown",
+                ).inc()
 
         if d.get("cross_border"):
             home = d.get("home_region") or "?"
@@ -87,9 +101,9 @@ def replay_metrics_from_store(
                     ).inc()
 
         # Tokens / per-model cost: attribute to the model that actually
-        # produced the final answer. This is approximate when escalated (the
-        # weak call's tokens leak into gpt-4o's bucket) but the per-router
-        # ACTUAL_COST counters above are exact.
+        # produced the final answer. The per-router ACTUAL_COST counters
+        # above are exact; this per-model bucket is approximate.
+        weak_model = d.get("weak_model") or (chain[0].get("model") if chain else "")
         final_model = d.get("final_model") or weak_model
         if final_model:
             if d.get("tokens_prompt"):

@@ -35,10 +35,13 @@ class SelfReportedRouter(UncertaintyRouter):
             },
         ]
         s = get_settings()
+        # Self-reported confidence is asked of the same tier that produced
+        # `weak.text`. Use that completion's model so the followup matches.
+        followup_tier = next((t for t in s.tiers if t.model == weak.model), s.tiers[0])
         completions = await self._client.complete(
-            model=s.weak_model,
+            model=followup_tier.model,
             messages=followup,
-            tier="weak",
+            tier=followup_tier.name,
             temperature=0.0,
             max_tokens=8,
         )

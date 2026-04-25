@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS decisions (
     score REAL NOT NULL,
     threshold REAL NOT NULL,
     escalated INTEGER NOT NULL,
+    tier_chain TEXT,
+    final_tier_index INTEGER,
     weak_model TEXT,
     weak_processor TEXT,
     weak_region TEXT,
@@ -71,12 +73,22 @@ CREATE TABLE IF NOT EXISTS threshold_history (
 
 DECISION_COLS = (
     "ts", "prompt_sha", "router", "score", "threshold", "escalated",
+    "tier_chain", "final_tier_index",
     "weak_model", "weak_processor", "weak_region", "weak_dpa_ref",
     "strong_model", "strong_processor", "strong_region",
     "final_model", "final_region", "home_region", "regions_touched_json",
     "cross_border", "tokens_prompt", "tokens_completion",
     "cost_usd", "counterfactual_usd", "latency_ms",
 )
+
+
+def _ensure_columns(c: sqlite3.Connection) -> None:
+    """Add tier_chain / final_tier_index to legacy DBs that pre-date 3-tier."""
+    have = {row["name"] for row in c.execute("PRAGMA table_info(decisions)").fetchall()}
+    if "tier_chain" not in have:
+        c.execute("ALTER TABLE decisions ADD COLUMN tier_chain TEXT")
+    if "final_tier_index" not in have:
+        c.execute("ALTER TABLE decisions ADD COLUMN final_tier_index INTEGER")
 
 EVAL_COLS = ("ts", "router", "qid", "subject", "score", "escalated", "correct")
 
@@ -95,6 +107,7 @@ class Store:
         self._lock = threading.Lock()
         with self._connect() as c:
             c.executescript(SCHEMA)
+            _ensure_columns(c)
             c.execute("PRAGMA journal_mode = WAL")
             # Bounded WAL: checkpoint into the main DB every 100 pages so a lost
             # WAL never strands more than a small batch of recent rows.
@@ -232,6 +245,11 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
             d["regions_touched"] = json.loads(d["regions_touched_json"])
         except Exception:
             d["regions_touched"] = []
+    if d.get("tier_chain"):
+        try:
+            d["tier_chain"] = json.loads(d["tier_chain"])
+        except Exception:
+            d["tier_chain"] = []
     d["escalated"] = bool(d.get("escalated"))
     d["cross_border"] = bool(d.get("cross_border"))
     return d
@@ -239,8 +257,15 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 def _prepare_decision(row: dict[str, Any]) -> dict[str, Any]:
     """Normalise the dict produced by the cascade for SQLite insertion."""
-    out = {col: row.get(col) for col in DECISION_COLS}
+    out: dict[str, Any] = {col: row.get(col) for col in DECISION_COLS}
     out["regions_touched_json"] = json.dumps(row.get("regions_touched") or [])
+    chain = row.get("tier_chain")
+    if isinstance(chain, list):
+        out["tier_chain"] = json.dumps(chain, default=str)
+    elif isinstance(chain, str):
+        out["tier_chain"] = chain
+    else:
+        out["tier_chain"] = None
     out["escalated"] = int(bool(row.get("escalated")))
     out["cross_border"] = int(bool(row.get("cross_border")))
     return out

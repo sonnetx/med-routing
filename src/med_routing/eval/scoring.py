@@ -41,8 +41,8 @@ async def score_freeform_with_judge(
     """LLM-as-judge scoring for free-form answers.
 
     Truncates each side to `max_chars` to keep the judge prompt cheap. The
-    judge call uses tier="strong" so its cost rolls into the strong-tier
-    accounting — visible in Grafana but not attributed to either router.
+    judge call uses tier="judge" so its cost rolls into a dedicated bucket —
+    visible in Grafana but not attributed to either tier or router.
     """
     if not predicted.strip() or not reference.strip():
         return False
@@ -60,7 +60,7 @@ async def score_freeform_with_judge(
         completions = await judge_client.complete(
             model=judge_model,
             messages=msgs,
-            tier="strong",
+            tier="judge",
             temperature=0.0,
             max_tokens=4,
         )
