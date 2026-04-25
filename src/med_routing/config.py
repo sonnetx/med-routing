@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     # auto delegates to a sub-router and overrides the threshold per-call to the
     # sub-router's calibrated value, so this default is mostly ignored.
     threshold_auto: float = Field(default=0.50, alias="THRESHOLD_AUTO")
+    threshold_semantic_entropy_embed: float = Field(
+        default=0.50, alias="THRESHOLD_SEMANTIC_ENTROPY_EMBED"
+    )
+
+    # Pricing snapshot for the embeddings model used by semantic_entropy_embed.
+    embed_model: str = Field(default="text-embedding-3-small", alias="EMBED_MODEL")
+    judge_model: str = Field(default="gpt-4o-mini", alias="JUDGE_MODEL")
+    demo_data_dir: str = Field(default="demo_data", alias="DEMO_DATA_DIR")
 
     sample_n: int = Field(default=5, alias="SAMPLE_N")
     sample_temperature: float = Field(default=0.7, alias="SAMPLE_TEMPERATURE")
@@ -61,6 +69,7 @@ class Settings(BaseSettings):
             "self_reported": self.threshold_self_reported,
             "predictive_entropy": self.threshold_predictive_entropy,
             "semantic_entropy": self.threshold_semantic_entropy,
+            "semantic_entropy_embed": self.threshold_semantic_entropy_embed,
             "self_consistency": self.threshold_self_consistency,
             "routellm": self.threshold_routellm,
             "learned": self.threshold_learned,

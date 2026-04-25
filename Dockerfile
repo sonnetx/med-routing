@@ -14,12 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml ./
 COPY src ./src
+COPY demo_data ./demo_data
 COPY README.md ./
 
-# Install with the [nli] extra so semantic_entropy can use DeBERTa-v3-MNLI.
-# torch + transformers + sentencepiece add ~2GB but the model itself is fetched
-# at runtime into the mounted hf_cache volume.
-RUN pip install --upgrade pip && pip install -e ".[nli]"
+# Base install only. The legacy semantic_entropy router (NLI / DeBERTa) is
+# gated on ENABLE_NLI=true and would require pip install -e ".[nli]" — but the
+# semantic_entropy_embed router uses OpenAI embeddings instead and needs only
+# the base deps, so we skip the ~2GB torch+CUDA install.
+RUN pip install --upgrade pip && pip install -e "."
 
 EXPOSE 8000
 

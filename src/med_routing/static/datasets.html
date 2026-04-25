@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>med-routing — evaluate on your data</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #c9d1d9;
+    --muted: #8b949e; --accent: #58a6ff; --weak: #3fb950; --strong: #f85149;
+    --warn: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex;
+           justify-content: space-between; align-items: baseline; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .links a { color: var(--muted); text-decoration: none; margin-left: 14px; }
+  header .links a:hover { color: var(--accent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+           padding: 18px; margin-bottom: 18px; }
+  .panel h2 { font-size: 12px; font-weight: 600; text-transform: uppercase;
+              letter-spacing: 0.05em; color: var(--muted); margin: 0 0 14px 0; }
+  textarea, input, select { width: 100%; background: #0d1117; color: var(--text);
+              border: 1px solid var(--line); border-radius: 4px; padding: 8px;
+              font: inherit; }
+  label { display: block; margin: 10px 0 4px 0; font-size: 12px; color: var(--muted); }
+  button { background: var(--accent); color: #0d1117; border: 0; border-radius: 4px;
+           padding: 10px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent);
+                     border: 1px solid var(--line); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 10px;
+           font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .badge.weak { background: rgba(63,185,80,0.15); color: var(--weak); }
+  .badge.strong { background: rgba(248,81,73,0.18); color: var(--strong); }
+  .badge.warn { background: rgba(210,153,34,0.18); color: var(--warn); }
+  .badge.muted { background: #21262d; color: var(--muted); }
+
+  .steps { display: flex; gap: 12px; margin-bottom: 22px; padding: 0; list-style: none; }
+  .steps li { flex: 1; padding: 10px 14px; border: 1px solid var(--line); border-radius: 6px;
+              background: var(--panel); display: flex; align-items: center; gap: 10px;
+              opacity: 0.6; }
+  .steps li.active { opacity: 1; border-color: var(--accent); }
+  .steps li.done { opacity: 1; border-color: var(--weak); }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; background: #21262d;
+              color: var(--muted); display: grid; place-items: center;
+              font-weight: 700; font-size: 12px; }
+  .steps li.active .step-num { background: var(--accent); color: #0d1117; }
+  .steps li.done .step-num { background: var(--weak); color: #0d1117; }
+  .step-label { font-size: 13px; }
+
+  .cost-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .cost-card { background: #0d1117; border: 1px solid var(--line); border-radius: 6px;
+               padding: 12px; }
+  .cost-card .model { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .cost-card .price { font-size: 22px; font-weight: 700; margin-top: 6px;
+                      font-variant-numeric: tabular-nums; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px;
+          font-family: ui-monospace, Consolas, monospace; }
+  table th { text-align: left; padding: 8px 10px; background: #0d1117;
+             border-bottom: 1px solid var(--line); color: var(--muted);
+             font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+             font-size: 11px; }
+  table td { padding: 8px 10px; border-bottom: 1px solid var(--line);
+             vertical-align: top; }
+  table tr:last-child td { border-bottom: none; }
+  td.qcol { max-width: 480px; white-space: pre-wrap; font-family: inherit; }
+  td.gtcol { max-width: 380px; white-space: pre-wrap; font-family: inherit; color: var(--muted); }
+
+  .progress { height: 6px; background: #0d1117; border-radius: 3px; overflow: hidden;
+              border: 1px solid var(--line); margin-top: 6px; }
+  .progress > div { height: 100%; background: var(--accent); width: 0%;
+                    transition: width 0.4s ease; }
+
+  .chart-wrap { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
+  svg.chart { width: 100%; height: 360px; background: #0d1117; border: 1px solid var(--line);
+              border-radius: 6px; }
+  svg.chart .axis { stroke: var(--line); stroke-width: 1; }
+  svg.chart .grid { stroke: #21262d; stroke-width: 1; stroke-dasharray: 2,2; }
+  svg.chart .axis-text { fill: var(--muted); font-size: 11px; font-family: ui-monospace, monospace; }
+  svg.chart .pt { fill: var(--muted); }
+  svg.chart .pt.frontier { fill: var(--accent); }
+  svg.chart .pt.recommended { fill: var(--weak); stroke: var(--weak); stroke-width: 2; fill-opacity: 0.6; }
+  svg.chart .baseline { stroke-width: 1; stroke-dasharray: 4,3; fill: none; }
+  svg.chart .baseline.weak { stroke: var(--weak); }
+  svg.chart .baseline.strong { stroke: var(--strong); }
+  svg.chart .frontier-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-opacity: 0.6; }
+
+  .legend { font-size: 12px; color: var(--muted); }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .recommendation { background: rgba(63,185,80,0.08); border: 1px solid var(--weak);
+                    border-radius: 6px; padding: 14px; margin-bottom: 14px; }
+  .recommendation .big { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .recommendation .reason { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  .demo-tag { display: inline-block; padding: 2px 8px; background: rgba(210,153,34,0.18);
+              color: var(--warn); font-size: 10px; font-weight: 600; border-radius: 3px;
+              text-transform: uppercase; letter-spacing: 0.04em; }
+  .err { color: var(--strong); font-size: 12px; margin-top: 8px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+           padding: 4px 10px; background: #0d1117; border: 1px solid var(--line);
+           border-radius: 12px; cursor: pointer; user-select: none; }
+  .check input { width: auto; margin: 0; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+  .stat { background: #0d1117; border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .stat .value { font-size: 22px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <h1>med-routing — evaluate on your data</h1>
+  <div class="links">
+    <a href="/">Cascade demo</a>
+    <a href="/docs" target="_blank">API docs</a>
+    <a href="http://localhost:3000" target="_blank">Grafana</a>
+  </div>
+</header>
+
+<main>
+  <ol class="steps" id="steps">
+    <li id="step-1" class="active"><span class="step-num">1</span><span class="step-label">Upload</span></li>
+    <li id="step-2"><span class="step-num">2</span><span class="step-label">Generate ground truth</span></li>
+    <li id="step-3"><span class="step-num">3</span><span class="step-label">Evaluate routers</span></li>
+    <li id="step-4"><span class="step-num">4</span><span class="step-label">Pareto report</span></li>
+  </ol>
+
+  <section class="panel" id="panel-upload">
+    <h2>1 — upload your eval data</h2>
+    <p class="muted">CSV with columns <code>question</code> (required), <code>ground_truth</code>, <code>subject</code>, <code>difficulty</code>, <code>qid</code> (optional). If <code>ground_truth</code> is present we skip generation; otherwise step 2 generates it with a frontier model.</p>
+    <div class="row" style="margin-top: 10px">
+      <input type="file" id="file" accept=".csv,text/csv" style="flex:1" />
+      <button id="btn-use-demo" class="secondary">Use demo dataset (with ground truth)</button>
+      <button id="btn-use-demo-blank" class="secondary">Use demo dataset (generate ground truth)</button>
+    </div>
+    <div id="upload-err" class="err"></div>
+  </section>
+
+  <section class="panel" id="panel-generate" style="display:none">
+    <h2>2 — generate ground truth <span class="demo-tag">demo mode — cached</span></h2>
+    <div class="row" style="margin-bottom: 14px">
+      <div style="flex: 1"><strong id="ds-name"></strong> · <span class="muted" id="ds-count"></span></div>
+    </div>
+
+    <table style="margin-bottom: 14px">
+      <thead><tr><th>qid</th><th>question</th><th>subject</th><th>ground truth</th></tr></thead>
+      <tbody id="preview-body"></tbody>
+    </table>
+
+    <div id="cost-section">
+      <label>Estimated cost to generate ground truth (one-time):</label>
+      <div class="cost-grid" id="cost-grid"></div>
+    </div>
+
+    <div class="row" style="margin-top: 14px">
+      <select id="gen-model" style="max-width: 280px">
+        <option value="claude-opus-4-7">claude-opus-4-7 (highest quality)</option>
+        <option value="gpt-5">gpt-5</option>
+        <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+      </select>
+      <button id="btn-generate">Generate ground truth</button>
+      <span class="muted" id="gen-status"></span>
+    </div>
+    <div class="progress" id="gen-progress" style="display:none"><div></div></div>
+    <div id="generate-err" class="err"></div>
+  </section>
+
+  <section class="panel" id="panel-evaluate" style="display:none">
+    <h2>3 — evaluate cascade routers on this data</h2>
+    <p class="muted">Sweeps thresholds for each selected router. Each cascade decision is scored against your ground truth by an LLM-as-judge (gpt-4o-mini). Output is a cost-vs-accuracy frontier — you pick your operating point.</p>
+    <label style="margin-top:10px">Routers to evaluate</label>
+    <div class="pill-row" id="router-list"></div>
+
+    <label style="margin-top:14px">Thresholds to sweep</label>
+    <div class="pill-row" id="threshold-list"></div>
+
+    <div class="row" style="margin-top: 14px">
+      <button id="btn-evaluate">Run evaluation</button>
+      <span class="muted" id="eval-status"></span>
+    </div>
+    <div class="progress" id="eval-progress" style="display:none"><div></div></div>
+    <div id="evaluate-err" class="err"></div>
+  </section>
+
+  <section class="panel" id="panel-report" style="display:none">
+    <h2>4 — pareto report</h2>
+    <div id="recommendation"></div>
+
+    <div class="stats-row">
+      <div class="stat"><div class="label">Questions</div><div class="value" id="stat-n">—</div></div>
+      <div class="stat"><div class="label">Weak-only accuracy</div><div class="value" id="stat-weak-acc">—</div></div>
+      <div class="stat"><div class="label">Strong-only accuracy</div><div class="value" id="stat-strong-acc">—</div></div>
+      <div class="stat"><div class="label">Best cascade savings</div><div class="value" id="stat-savings">—</div></div>
+    </div>
+
+    <div class="chart-wrap">
+      <svg class="chart" id="chart" viewBox="0 0 700 360" preserveAspectRatio="none"></svg>
+      <div>
+        <div style="margin-bottom: 12px">
+          <div class="legend">
+            <div class="legend-item"><span class="swatch" style="background: var(--accent)"></span>On Pareto frontier</div>
+            <div class="legend-item"><span class="swatch" style="background: var(--muted)"></span>Dominated configs</div>
+            <div class="legend-item"><span class="swatch" style="background: var(--weak)"></span>Recommended</div>
+            <div class="legend-item"><span class="swatch" style="background: var(--weak); opacity:0.4"></span>Weak-only baseline</div>
+            <div class="legend-item"><span class="swatch" style="background: var(--strong); opacity:0.4"></span>Strong-only baseline</div>
+          </div>
+        </div>
+        <div class="muted" style="font-size:11px">
+          Cascade configs in the lower-left of the chart (low cost, high accuracy) dominate. The frontier shows the best-accuracy point at each cost. Off-frontier configs are strictly worse.
+        </div>
+      </div>
+    </div>
+
+    <h2 style="margin-top: 24px">all configurations</h2>
+    <table id="report-table">
+      <thead><tr><th>router</th><th>threshold</th><th>accuracy</th><th>escalation rate</th><th>cost (USD)</th><th>frontier</th></tr></thead>
+      <tbody id="report-body"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+let currentDatasetId = null;
+const availableRouters = ["self_reported", "semantic_entropy_embed"];
+const selectedRouters = new Set(availableRouters);
+const availableThresholds = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7];
+const selectedThresholds = new Set(availableThresholds);
+
+function setStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const li = $(`step-${i}`);
+    li.classList.remove("active", "done");
+    if (i < n) li.classList.add("done");
+    if (i === n) li.classList.add("active");
+  }
+}
+
+function clearChildren(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") e.className = v;
+      else if (k === "style") e.setAttribute("style", v);
+      else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v);
+    }
+  }
+  for (const c of children) {
+    if (c == null) continue;
+    e.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(String(c)) : c);
+  }
+  return e;
+}
+function makeBadge(kind, text) { return el("span", { class: `badge ${kind}` }, text); }
+
+function resetDownstreamUI() {
+  // Clear any state from a previous upload so switching modes doesn't show stale data.
+  $("panel-generate").style.display = "none";
+  $("panel-evaluate").style.display = "none";
+  $("panel-report").style.display = "none";
+  $("cost-section").style.display = "";
+  clearChildren($("preview-body"));
+  clearChildren($("cost-grid"));
+  clearChildren($("router-list"));
+  clearChildren($("threshold-list"));
+  clearChildren($("recommendation"));
+  clearChildren($("report-body"));
+  clearChildren($("gen-status"));
+  clearChildren($("eval-status"));
+  $("ds-name").textContent = "";
+  $("ds-count").textContent = "";
+  $("stat-n").textContent = "—";
+  $("stat-weak-acc").textContent = "—";
+  $("stat-strong-acc").textContent = "—";
+  $("stat-savings").textContent = "—";
+  $("generate-err").textContent = "";
+  $("evaluate-err").textContent = "";
+  $("btn-generate").disabled = false;
+  $("btn-evaluate").disabled = false;
+  $("gen-progress").style.display = "none";
+  $("eval-progress").style.display = "none";
+  const chart = $("chart");
+  while (chart.firstChild) chart.removeChild(chart.firstChild);
+  setStep(1);
+}
+
+async function uploadCsv(content, name, { fresh = false } = {}) {
+  // Send raw CSV body — server's multipart path needs python-multipart which
+  // isn't in the slim image; raw body is supported and avoids the dep.
+  // `fresh=true` skips the deterministic-ID dedup so we get a brand-new dataset.
+  $("upload-err").textContent = "";
+  resetDownstreamUI();
+  const url = `/v1/datasets?name=${encodeURIComponent(name)}` + (fresh ? "&fresh=1" : "");
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "text/csv" },
+    body: content,
+  });
+  if (!resp.ok) {
+    $("upload-err").textContent = `Upload failed (${resp.status}): ${await resp.text()}`;
+    return;
+  }
+  const ds = await resp.json();
+  currentDatasetId = ds.id;
+  await renderAfterUpload(ds);
+}
+
+function renderPreviewRows(rows) {
+  const tbody = $("preview-body");
+  clearChildren(tbody);
+  for (const r of (rows || [])) {
+    const tr = el("tr", null,
+      el("td", null, String(r.qid ?? "")),
+      el("td", { class: "qcol" }, String(r.question ?? "")),
+      el("td", null, String(r.subject ?? "")),
+      el("td", { class: "gtcol" }, String(r.ground_truth ?? "(not yet generated)")),
+    );
+    tbody.appendChild(tr);
+  }
+}
+
+async function renderAfterUpload(ds) {
+  $("ds-name").textContent = String(ds.name ?? "");
+  $("ds-count").textContent = `${ds.n} questions`;
+  renderPreviewRows(ds.rows);
+
+  const costResp = await fetch(`/v1/datasets/${ds.id}/cost-estimate`);
+  if (costResp.ok) {
+    const cost = await costResp.json();
+    const grid = $("cost-grid");
+    clearChildren(grid);
+    for (const [model, usd] of Object.entries(cost.estimates_usd)) {
+      const card = el("div", { class: "cost-card" },
+        el("div", { class: "model" }, model),
+        el("div", { class: "price" }, `$${Number(usd).toFixed(4)}`),
+        el("div", { class: "muted", style: "font-size:11px;margin-top:4px" }, `for ${cost.n} questions`),
+      );
+      grid.appendChild(card);
+    }
+  }
+
+  $("panel-generate").style.display = "block";
+
+  if (ds.has_ground_truth_on_upload) {
+    const status = $("gen-status");
+    clearChildren(status);
+    status.appendChild(makeBadge("weak", "SKIPPED"));
+    status.appendChild(document.createTextNode(" Ground truth provided on upload."));
+    $("btn-generate").disabled = true;
+    $("cost-section").style.display = "none";
+    setStep(3);
+    showEvaluatePanel();
+  } else {
+    setStep(2);
+  }
+
+  // If this dataset already has a saved report, jump straight to it — no need
+  // to click Run evaluation. The eval panel stays visible above for re-runs
+  // with different routers/thresholds.
+  if (ds.report) {
+    setStep(4);
+    if (!ds.has_ground_truth_on_upload) showEvaluatePanel();  // ensure panel exists
+    const status = $("eval-status");
+    clearChildren(status);
+    status.appendChild(makeBadge("weak", "CACHED"));
+    status.appendChild(document.createTextNode(
+      ` Report loaded from disk — ${ds.report.points.length} configs evaluated previously. Click Run evaluation to recompute.`));
+    renderReport(ds.report);
+    return;
+  }
+
+  $("panel-upload").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function generate() {
+  const model = $("gen-model").value;
+  $("btn-generate").disabled = true;
+  $("gen-status").textContent = "calling " + model + "...";
+  $("gen-progress").style.display = "block";
+  const bar = $("gen-progress").firstElementChild;
+  let pct = 0;
+  const interval = setInterval(() => {
+    pct = Math.min(95, pct + 4);
+    bar.style.width = pct + "%";
+  }, 200);
+  try {
+    const resp = await fetch(`/v1/datasets/${currentDatasetId}/generate`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model }),
+    });
+    clearInterval(interval);
+    bar.style.width = "100%";
+    if (!resp.ok) {
+      $("generate-err").textContent = `Generation failed: ${await resp.text()}`;
+      return;
+    }
+    const ds = await resp.json();
+    const status = $("gen-status");
+    clearChildren(status);
+    status.appendChild(makeBadge("weak", "DONE"));
+    status.appendChild(document.createTextNode(` Ground truth generated for ${ds.n} questions by ${ds.generation_model}.`));
+    renderPreviewRows(ds.rows);
+    setStep(3);
+    showEvaluatePanel();
+  } finally {
+    setTimeout(() => $("gen-progress").style.display = "none", 800);
+  }
+}
+
+function showEvaluatePanel() {
+  $("panel-evaluate").style.display = "block";
+  const rl = $("router-list");
+  clearChildren(rl);
+  for (const name of availableRouters) {
+    const cb = el("input", { type: "checkbox" });
+    cb.checked = selectedRouters.has(name);
+    cb.addEventListener("change", () => {
+      if (cb.checked) selectedRouters.add(name); else selectedRouters.delete(name);
+    });
+    const lbl = el("label", { class: "check" }, cb, document.createTextNode(" " + name));
+    rl.appendChild(lbl);
+  }
+  const tl = $("threshold-list");
+  clearChildren(tl);
+  for (const t of availableThresholds) {
+    const cb = el("input", { type: "checkbox" });
+    cb.checked = selectedThresholds.has(t);
+    cb.addEventListener("change", () => {
+      if (cb.checked) selectedThresholds.add(t); else selectedThresholds.delete(t);
+    });
+    const lbl = el("label", { class: "check" }, cb, document.createTextNode(" " + t.toFixed(1)));
+    tl.appendChild(lbl);
+  }
+  $("panel-evaluate").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function evaluate() {
+  const routers = [...selectedRouters];
+  const thresholds = [...selectedThresholds].sort((a, b) => a - b);
+  if (!routers.length || !thresholds.length) {
+    $("evaluate-err").textContent = "Select at least one router and one threshold.";
+    return;
+  }
+  $("btn-evaluate").disabled = true;
+  $("eval-status").textContent = "running cascade × judge for each (question, router, threshold)...";
+  $("eval-progress").style.display = "block";
+  const bar = $("eval-progress").firstElementChild;
+  const total_estimate_s = 30 + 0.8 * 25;
+  const start = Date.now();
+  const interval = setInterval(() => {
+    const elapsed = (Date.now() - start) / 1000;
+    bar.style.width = Math.min(95, (elapsed / total_estimate_s) * 100) + "%";
+  }, 300);
+  try {
+    const resp = await fetch(`/v1/datasets/${currentDatasetId}/evaluate`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ routers, thresholds }),
+    });
+    clearInterval(interval);
+    bar.style.width = "100%";
+    if (!resp.ok) {
+      $("evaluate-err").textContent = `Eval failed: ${await resp.text()}`;
+      return;
+    }
+    const report = await resp.json();
+    const status = $("eval-status");
+    clearChildren(status);
+    status.appendChild(makeBadge("weak", "DONE"));
+    status.appendChild(document.createTextNode(` Evaluated ${report.points.length} configurations on ${report.n} questions.`));
+    setStep(4);
+    renderReport(report);
+  } finally {
+    $("btn-evaluate").disabled = false;
+    setTimeout(() => $("eval-progress").style.display = "none", 800);
+  }
+}
+
+function renderReport(report) {
+  $("panel-report").style.display = "block";
+  $("stat-n").textContent = String(report.n);
+  $("stat-weak-acc").textContent = (report.weak_only.accuracy * 100).toFixed(1) + "%";
+  $("stat-strong-acc").textContent = (report.strong_only.accuracy * 100).toFixed(1) + "%";
+
+  const recBox = $("recommendation");
+  clearChildren(recBox);
+  if (report.recommended) {
+    const r = report.recommended;
+    const savings = report.strong_only.cost_usd > 0
+      ? (1 - r.cost_usd / report.strong_only.cost_usd) * 100 : 0;
+    $("stat-savings").textContent = savings.toFixed(0) + "%";
+    const code = el("code", null, String(r.router));
+    const big = el("div", { class: "big" }, "Recommended: ", code, ` at threshold ${Number(r.threshold).toFixed(2)}`);
+    const meta = el("div", { class: "muted" },
+      `Accuracy ${(r.accuracy * 100).toFixed(1)}% · cost $${r.cost_usd.toFixed(5)} · ${(r.escalation_rate * 100).toFixed(0)}% escalation rate · saves ${savings.toFixed(0)}% vs always-strong`);
+    const reason = el("div", { class: "reason" }, String(r.reason ?? ""));
+    recBox.appendChild(el("div", { class: "recommendation" }, big, meta, reason));
+  } else {
+    $("stat-savings").textContent = "—";
+    recBox.appendChild(el("div", { class: "muted" },
+      "No configuration on the Pareto frontier beats the weak-only baseline. Try adding more thresholds or routers."));
+  }
+  drawChart(report);
+
+  const tbody = $("report-body");
+  clearChildren(tbody);
+  const frontierSet = new Set(report.pareto_indices);
+  report.points.forEach((p, i) => {
+    const frontierCell = el("td", null);
+    if (frontierSet.has(i)) frontierCell.appendChild(makeBadge("weak", "YES"));
+    const tr = el("tr", null,
+      el("td", null, String(p.router)),
+      el("td", null, Number(p.threshold).toFixed(2)),
+      el("td", null, (p.accuracy * 100).toFixed(1) + "%"),
+      el("td", null, (p.escalation_rate * 100).toFixed(0) + "%"),
+      el("td", null, "$" + Number(p.cost_usd).toFixed(5)),
+      frontierCell,
+    );
+    tbody.appendChild(tr);
+  });
+  $("panel-report").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, text) {
+  const e = document.createElementNS(SVGNS, tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+  if (text != null) e.appendChild(document.createTextNode(String(text)));
+  return e;
+}
+
+function drawChart(report) {
+  const svg = $("chart");
+  const W = 700, H = 360, m = { l: 50, r: 18, t: 14, b: 36 };
+  const pw = W - m.l - m.r;
+  const ph = H - m.t - m.b;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const allCosts = report.points.map(p => p.cost_usd).concat([report.weak_only.cost_usd, report.strong_only.cost_usd]);
+  const allAcc = report.points.map(p => p.accuracy).concat([report.weak_only.accuracy, report.strong_only.accuracy]);
+  const xMin = 0;
+  const xMax = (Math.max(...allCosts) * 1.05) || 1;
+  const yMin = Math.max(0, Math.min(...allAcc) - 0.05);
+  const yMax = Math.min(1, Math.max(...allAcc) + 0.05);
+
+  const xs = (v) => m.l + (v - xMin) / (xMax - xMin) * pw;
+  const ys = (v) => m.t + (1 - (v - yMin) / (yMax - yMin)) * ph;
+
+  for (let i = 0; i <= 4; i++) {
+    const y = m.t + (i / 4) * ph;
+    svg.appendChild(svgEl("line", { class: "grid", x1: m.l, y1: y, x2: m.l + pw, y2: y }));
+    const v = yMax - (i / 4) * (yMax - yMin);
+    svg.appendChild(svgEl("text", { class: "axis-text", x: m.l - 8, y: y + 4, "text-anchor": "end" }, (v * 100).toFixed(0) + "%"));
+  }
+  for (let i = 0; i <= 4; i++) {
+    const x = m.l + (i / 4) * pw;
+    svg.appendChild(svgEl("line", { class: "grid", x1: x, y1: m.t, x2: x, y2: m.t + ph }));
+    const v = xMin + (i / 4) * (xMax - xMin);
+    svg.appendChild(svgEl("text", { class: "axis-text", x, y: m.t + ph + 18, "text-anchor": "middle" }, "$" + v.toFixed(4)));
+  }
+  svg.appendChild(svgEl("line", { class: "axis", x1: m.l, y1: m.t + ph, x2: m.l + pw, y2: m.t + ph }));
+  svg.appendChild(svgEl("line", { class: "axis", x1: m.l, y1: m.t, x2: m.l, y2: m.t + ph }));
+  svg.appendChild(svgEl("text", { class: "axis-text", x: m.l + pw / 2, y: H - 4, "text-anchor": "middle" }, "cost (USD, total over dataset)"));
+  svg.appendChild(svgEl("text", { class: "axis-text", x: 10, y: m.t + ph / 2, transform: `rotate(-90 10 ${m.t + ph / 2})`, "text-anchor": "middle" }, "accuracy (judged by gpt-4o-mini)"));
+
+  const wy = ys(report.weak_only.accuracy);
+  const sy = ys(report.strong_only.accuracy);
+  svg.appendChild(svgEl("line", { class: "baseline weak", x1: m.l, y1: wy, x2: m.l + pw, y2: wy }));
+  svg.appendChild(svgEl("text", { class: "axis-text", x: m.l + pw - 6, y: wy - 4, "text-anchor": "end", fill: "var(--weak)" },
+    `weak only ${(report.weak_only.accuracy * 100).toFixed(0)}%`));
+  svg.appendChild(svgEl("line", { class: "baseline strong", x1: m.l, y1: sy, x2: m.l + pw, y2: sy }));
+  svg.appendChild(svgEl("text", { class: "axis-text", x: m.l + pw - 6, y: sy - 4, "text-anchor": "end", fill: "var(--strong)" },
+    `strong only ${(report.strong_only.accuracy * 100).toFixed(0)}%`));
+
+  const frontier = report.pareto_indices
+    .map(i => report.points[i])
+    .sort((a, b) => a.cost_usd - b.cost_usd);
+  if (frontier.length > 1) {
+    const d = "M " + frontier.map(p => `${xs(p.cost_usd)},${ys(p.accuracy)}`).join(" L ");
+    svg.appendChild(svgEl("path", { class: "frontier-line", d }));
+  }
+
+  const recommendedIdx = report.recommended ? report.recommended.index : -1;
+  const frontierSet = new Set(report.pareto_indices);
+  report.points.forEach((p, i) => {
+    const cls = (i === recommendedIdx) ? "pt recommended" : (frontierSet.has(i) ? "pt frontier" : "pt");
+    const r = (i === recommendedIdx) ? 8 : (frontierSet.has(i) ? 5 : 3.5);
+    const c = svgEl("circle", { class: cls, cx: xs(p.cost_usd), cy: ys(p.accuracy), r });
+    c.appendChild(svgEl("title", null,
+      `${p.router} @ ${Number(p.threshold).toFixed(2)} — accuracy ${(p.accuracy * 100).toFixed(1)}%, cost $${p.cost_usd.toFixed(5)}, esc ${(p.escalation_rate * 100).toFixed(0)}%`));
+    svg.appendChild(c);
+  });
+}
+
+$("file").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const text = await f.text();
+  await uploadCsv(text, f.name);
+});
+
+$("btn-use-demo").addEventListener("click", async () => {
+  const r = await fetch("/v1/datasets/demo/preview");
+  if (!r.ok) {
+    $("upload-err").textContent = "Demo dataset not available on the server.";
+    return;
+  }
+  const data = await r.json();
+  await uploadCsv(data.csv_with_gt, data.name);
+});
+
+$("btn-use-demo-blank").addEventListener("click", async () => {
+  const r = await fetch("/v1/datasets/demo/preview");
+  if (!r.ok) {
+    $("upload-err").textContent = "Demo dataset not available on the server.";
+    return;
+  }
+  const data = await r.json();
+  if (!data.csv_blank) {
+    $("upload-err").textContent = "Blank-CSV variant not on the server.";
+    return;
+  }
+  // fresh=true: always a new dataset so the generate flow's steps are visible
+  // each time (otherwise we'd land on a previously-generated dataset and skip).
+  await uploadCsv(data.csv_blank, data.name.replace(".csv", "_blank.csv"), { fresh: true });
+});
+
+$("btn-generate").addEventListener("click", generate);
+$("btn-evaluate").addEventListener("click", evaluate);
+</script>
+</body>
+</html>

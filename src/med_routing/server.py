@@ -22,6 +22,14 @@ from .config import (
     runtime_overrides,
     set_runtime_threshold,
 )
+from .datasets import (
+    DEMO_DATASET_NAME,
+    DatasetStore,
+    estimate_generation_cost,
+    estimate_tokens,
+    fake_generate,
+    run_eval_sweep,
+)
 from .eval.aggregator import EvalAggregator
 from .feedback import recommend_for_all
 from .fhir import decision_to_audit_event, to_bundle
@@ -97,7 +105,29 @@ async def lifespan(app: FastAPI):
         import logging
         logging.getLogger(__name__).warning("metrics replay failed: %s", exc)
 
+    # Persistence: datasets, completion cache, judge cache all live under data/.
+    persist_root = Path(s.db_path).parent  # use the same data/ dir as the SQLite store
+    dataset_store = DatasetStore(persist_dir=persist_root / "datasets")
+    n_loaded = dataset_store.load_from_disk()
+    app.state.dataset_store = dataset_store
+    app.state.completion_cache_path = persist_root / "completion_cache.json"
+    app.state.judge_cache_path = persist_root / "judge_cache.json"
+    n_cache = cache.load(app.state.completion_cache_path)
+    if n_loaded or n_cache:
+        import logging
+        logging.getLogger(__name__).info(
+            "loaded %d datasets, %d completion cache entries from disk",
+            n_loaded, n_cache,
+        )
+
+    app.state.openai_client = client
+    app.state.cache = cache
     yield
+    # Save completion cache on shutdown so the latest in-memory state lands on disk.
+    try:
+        cache.save(app.state.completion_cache_path)
+    except Exception:
+        pass
     audit.close()
 
 
@@ -379,6 +409,170 @@ async def compare_routers(req: CompareRequest) -> JSONResponse:
 
     results = await asyncio.gather(*(one(r) for r in chosen))
     return JSONResponse(content={"prompt_sha": None, "results": results})
+
+
+# ---------- Company-facing dataset workflow ----------
+
+
+class DatasetGenerateRequest(BaseModel):
+    model: str = Field(default="claude-opus-4-7", description="Frontier model for ground-truth generation (faked).")
+
+
+class DatasetEvaluateRequest(BaseModel):
+    routers: list[str] = Field(default_factory=lambda: ["self_reported", "semantic_entropy_embed"])
+    thresholds: list[float] = Field(default_factory=lambda: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+
+
+def _dataset_to_dict(ds: Any, *, with_rows: int | None = 0) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "id": ds.id,
+        "name": ds.name,
+        "status": ds.status,
+        "n": len(ds.rows),
+        "has_ground_truth_on_upload": ds.has_ground_truth_on_upload,
+        "generation_model": ds.generation_model,
+        "created_at": ds.created_at,
+        "report": ds.last_report,
+    }
+    if with_rows:
+        out["rows"] = [
+            {
+                "qid": r.qid,
+                "question": r.question,
+                "ground_truth": r.ground_truth,
+                "subject": r.subject,
+                "difficulty": r.difficulty,
+            }
+            for r in ds.rows[:with_rows]
+        ]
+    return out
+
+
+@app.get("/v1/datasets")
+async def list_datasets() -> list[dict[str, Any]]:
+    return [_dataset_to_dict(d) for d in app.state.dataset_store.list()]
+
+
+@app.get("/v1/datasets/{ds_id}")
+async def get_dataset(ds_id: str, preview: int = 5) -> dict[str, Any]:
+    ds = app.state.dataset_store.get(ds_id)
+    if ds is None:
+        raise HTTPException(404, f"dataset {ds_id} not found")
+    return _dataset_to_dict(ds, with_rows=max(0, min(preview, len(ds.rows))))
+
+
+@app.post("/v1/datasets")
+async def create_dataset(request: Request) -> dict[str, Any]:
+    """Accepts either multipart file upload (field 'file') with optional 'name'
+    form field, or raw CSV body with name from query string."""
+    form = None
+    try:
+        form = await request.form()
+    except Exception:
+        form = None
+    name = "uploaded.csv"
+    content: bytes | None = None
+    if form and "file" in form:
+        upload = form["file"]
+        name = getattr(upload, "filename", None) or form.get("name") or name
+        content = await upload.read()
+    else:
+        body = await request.body()
+        if not body:
+            raise HTTPException(400, "no CSV body provided")
+        name = request.query_params.get("name", name)
+        content = body
+    fresh = request.query_params.get("fresh", "").lower() in ("1", "true", "yes")
+    try:
+        ds = app.state.dataset_store.create_from_csv(name=name, content=content, force_new=fresh)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return _dataset_to_dict(ds, with_rows=5)
+
+
+@app.post("/v1/datasets/{ds_id}/generate")
+async def dataset_generate(ds_id: str, payload: DatasetGenerateRequest) -> dict[str, Any]:
+    ds = app.state.dataset_store.get(ds_id)
+    if ds is None:
+        raise HTTPException(404, f"dataset {ds_id} not found")
+    if ds.has_ground_truth_on_upload:
+        return {"ok": True, "skipped": True, "reason": "ground truth provided on upload"}
+    await fake_generate(ds, store=app.state.dataset_store)
+    ds.generation_model = payload.model
+    app.state.dataset_store.save(ds)
+    return _dataset_to_dict(ds, with_rows=5)
+
+
+@app.get("/v1/datasets/{ds_id}/cost-estimate")
+async def dataset_cost_estimate(ds_id: str) -> dict[str, Any]:
+    ds = app.state.dataset_store.get(ds_id)
+    if ds is None:
+        raise HTTPException(404, f"dataset {ds_id} not found")
+    return {
+        "n": len(ds.rows),
+        "total_question_tokens_est": sum(estimate_tokens(r.question) for r in ds.rows),
+        "estimates_usd": {
+            model: round(estimate_generation_cost(ds.rows, model), 4)
+            for model in ("claude-opus-4-7", "gpt-5", "claude-sonnet-4-6")
+        },
+    }
+
+
+@app.post("/v1/datasets/{ds_id}/evaluate")
+async def dataset_evaluate(ds_id: str, payload: DatasetEvaluateRequest) -> dict[str, Any]:
+    ds = app.state.dataset_store.get(ds_id)
+    if ds is None:
+        raise HTTPException(404, f"dataset {ds_id} not found")
+    if not all(r.ground_truth for r in ds.rows):
+        raise HTTPException(400, "dataset has rows without ground truth; generate first")
+    s = get_settings()
+    try:
+        report = await run_eval_sweep(
+            dataset=ds,
+            client=app.state.openai_client,
+            cache=app.state.cache,
+            routers=app.state.routers,
+            router_names=payload.routers,
+            thresholds=payload.thresholds,
+            judge_model=s.judge_model,
+            store=app.state.dataset_store,
+            judge_cache_path=app.state.judge_cache_path,
+        )
+        # Persist the completion cache too — biggest win for replay speed.
+        app.state.cache.save(app.state.completion_cache_path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return ds.last_report or {}
+
+
+@app.get("/v1/datasets/{ds_id}/report")
+async def dataset_report(ds_id: str) -> dict[str, Any]:
+    ds = app.state.dataset_store.get(ds_id)
+    if ds is None:
+        raise HTTPException(404, f"dataset {ds_id} not found")
+    if not ds.last_report:
+        raise HTTPException(409, "no eval report yet — POST /v1/datasets/{id}/evaluate first")
+    return ds.last_report
+
+
+@app.get("/v1/datasets/demo/preview")
+async def demo_dataset_preview() -> dict[str, Any]:
+    """Returns the canonical demo CSV (with ground truth) for the 'use demo dataset' button."""
+    s = get_settings()
+    csv_path = Path(s.demo_data_dir) / f"{DEMO_DATASET_NAME}.csv"
+    blank_path = Path(s.demo_data_dir) / f"{DEMO_DATASET_NAME}_blank.csv"
+    if not csv_path.exists():
+        raise HTTPException(503, f"demo CSV not present at {csv_path}")
+    return {
+        "name": csv_path.name,
+        "csv_with_gt": csv_path.read_text(),
+        "csv_blank": blank_path.read_text() if blank_path.exists() else "",
+    }
+
+
+@app.get("/datasets", include_in_schema=False)
+async def datasets_page() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "datasets.html")
 
 
 @app.post("/v1/chat/completions")

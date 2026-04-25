@@ -1,0 +1,9 @@
+services:
+  med-routing:
+    ports: !override
+      - "8001:8000"
+    volumes:
+      # Live-mount source + static so iteration during the hackathon doesn't
+      # need a docker compose build round trip.
+      - ./src/med_routing:/app/src/med_routing
+      - ./demo_data:/app/demo_data

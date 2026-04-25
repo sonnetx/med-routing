@@ -7,6 +7,7 @@ from .base import UncertaintyRouter
 from .predictive_entropy import PredictiveEntropyRouter
 from .self_consistency import SelfConsistencyRouter
 from .self_reported import SelfReportedRouter
+from .semantic_entropy_embed import SemanticEntropyEmbedRouter
 
 
 def build_routers(client: OpenAIClient) -> dict[str, UncertaintyRouter]:
@@ -15,6 +16,7 @@ def build_routers(client: OpenAIClient) -> dict[str, UncertaintyRouter]:
         SelfReportedRouter.name: SelfReportedRouter(client),
         SelfConsistencyRouter.name: SelfConsistencyRouter(),
         PredictiveEntropyRouter.name: PredictiveEntropyRouter(),
+        SemanticEntropyEmbedRouter.name: SemanticEntropyEmbedRouter(),
     }
     if s.enable_nli:
         # Heavy import gated on env flag so default startup stays fast.
@@ -70,6 +72,7 @@ KNOWN_ROUTERS = (
     "self_consistency",
     "predictive_entropy",
     "semantic_entropy",
+    "semantic_entropy_embed",
     "routellm",
     "learned",
     "auto",
