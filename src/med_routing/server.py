@@ -163,7 +163,14 @@ def _render_static(filename: str) -> Response:
         .replace("{{GRAFANA_LINK}}", _link(s.grafana_url, "Grafana"))
         .replace("{{PROMETHEUS_LINK}}", _link(s.prometheus_url, "Prometheus"))
     )
-    return Response(content=html_doc, media_type="text/html")
+    # no-store: previous deploys served these via FileResponse (with ETags),
+    # so browsers may have cached the localhost-link version. forcing revalidation
+    # avoids a stale-cache footgun for anyone who hit the page before the switch.
+    return Response(
+        content=html_doc,
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/", include_in_schema=False)
