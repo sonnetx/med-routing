@@ -187,7 +187,7 @@
     {
       "id": 61,
       "type": "stat",
-      "title": "p95 latency \u2014 weak",
+      "title": "p95 latency \u2014 nano (cheapest tier)",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -200,8 +200,8 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(medr_latency_seconds_bucket{tier=\"weak\"}[5m])))",
-          "legendFormat": "weak",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(medr_latency_seconds_bucket{tier=\"nano\"}[5m])))",
+          "legendFormat": "nano",
           "refId": "A",
           "instant": true
         }
@@ -246,7 +246,7 @@
     {
       "id": 62,
       "type": "stat",
-      "title": "p95 latency \u2014 strong",
+      "title": "p95 latency \u2014 base (top tier)",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -259,8 +259,8 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(medr_latency_seconds_bucket{tier=\"strong\"}[5m])))",
-          "legendFormat": "strong",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(medr_latency_seconds_bucket{tier=\"base\"}[5m])))",
+          "legendFormat": "base",
           "refId": "A",
           "instant": true
         }

@@ -207,6 +207,8 @@ class StreamingCascade:
                 per_router_visits[metric].append({
                     "tier_index": ti, "tier_name": tier.name, "model": tier.model,
                     "score": rs.score, "threshold": threshold, "escalated": escalate,
+                    "prompt_tokens": main.prompt_tokens,
+                    "completion_tokens": main.completion_tokens,
                 })
 
                 yield {
@@ -245,12 +247,14 @@ class StreamingCascade:
             LATENCY_SECONDS.labels(router=metric, tier=final["tier_name"]).observe(elapsed)
             actual = per_router_actual[metric]
             ACTUAL_COST_BY_ROUTER.labels(router=metric).inc(actual)
+            # counterfactual = cost of answering this same prompt entirely at
+            # the top tier. token counts are stable across tiers (same prompt,
+            # similar completion length), so use the first visit's tokens.
             ref_visit = visits[0]
             counterfactual = cost_usd(
                 top_model,
-                # Approximate top-tier token count from the cheapest call.
-                int(actual / max(1, len(visits))),
-                int(actual / max(1, len(visits))),
+                ref_visit["prompt_tokens"],
+                ref_visit["completion_tokens"],
             )
             COUNTERFACTUAL_COST_BY_ROUTER.labels(router=metric).inc(counterfactual)
 
@@ -300,7 +304,11 @@ class StreamingCascade:
                     "home_region": s.home_region,
                     "cross_border": any(is_cross_border(r, s.home_region) for r in regions_touched),
                     "cost_usd": per_router_actual[metric],
-                    "counterfactual_usd": cost_usd(top_model, 0, 0),
+                    "counterfactual_usd": cost_usd(
+                        top_model,
+                        visits[0]["prompt_tokens"],
+                        visits[0]["completion_tokens"],
+                    ),
                     "latency_ms": int(elapsed * 1000),
                 })
 
