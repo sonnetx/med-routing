@@ -20,7 +20,6 @@
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
     --m-self_reported:          #6aa9ff;
-    --m-self_consistency:       #f0a868;
     --m-predictive_entropy:     #b691f0;
     --m-semantic_entropy_embed: #5fc4a4;
     --m-semantic_entropy:       #ec8aa6;
@@ -335,7 +334,6 @@ const EXAMPLES = [
 
 const METRIC_DESCRIPTIONS = {
   self_reported: "follow-up call: 'rate your confidence 0\u2013100'",
-  self_consistency: "N samples; score = 1 \u2212 (modal cluster / N) by exact text",
   predictive_entropy: "mean per-token entropy of top-k logprobs / log(k)",
   semantic_entropy_embed: "N samples \u2192 embed \u2192 cosine cluster \u2192 entropy / log(N)",
   semantic_entropy: "N samples \u2192 NLI bidirectional clustering \u2192 entropy / log(N)",
@@ -537,11 +535,6 @@ function formatExtras(metric, ex) {
     if (ex.confidence != null) return `confidence: ${ex.confidence}/100`;
     if (ex.confidence_pct != null) return `confidence: ${ex.confidence_pct}%`;
     return ex.parsed === null ? 'unparsed' : '';
-  }
-  if (metric === 'self_consistency') {
-    if (ex.n_unique != null) return `${ex.n_unique}/${ex.n} unique  modal=${ex.modal_count}`;
-    if (ex.modal_count != null) return `modal=${ex.modal_count}/${ex.n}`;
-    return '';
   }
   if (metric === 'predictive_entropy') {
     return `H=${(ex.raw_entropy_nats||0).toFixed(2)} nats`;

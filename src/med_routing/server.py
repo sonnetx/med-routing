@@ -423,7 +423,6 @@ async def list_tiers() -> list[dict[str, Any]]:
 # variables in static/index.html (--m-self_reported etc.).
 _METRIC_LABELS = {
     "self_reported": "self-reported",
-    "self_consistency": "self-consistency",
     "predictive_entropy": "predictive entropy",
     "semantic_entropy_embed": "semantic entropy (embed)",
     "semantic_entropy": "semantic entropy (NLI)",
@@ -440,7 +439,6 @@ async def metrics_meta() -> list[dict[str, Any]]:
     s = get_settings()
     visible_order = (
         "self_reported",
-        "self_consistency",
         "predictive_entropy",
         "semantic_entropy_embed",
         "semantic_entropy",

@@ -40,9 +40,9 @@ class AutoRouter(UncertaintyRouter):
     available registered routers based on the prompt's format.
 
     - mcq      → predictive_entropy if available (zero extra cost), else
-                 self_consistency, else self_reported.
-    - free_form → semantic_entropy if available (NLI handles paraphrases),
-                  else self_consistency (string-match fallback), else
+                 self_reported.
+    - free_form → semantic_entropy (NLI) if available, else
+                  semantic_entropy_embed (cosine clustering), else
                   self_reported.
 
     The chosen sub-router's calibrated threshold is returned via
@@ -52,8 +52,8 @@ class AutoRouter(UncertaintyRouter):
     name: ClassVar[str] = "auto"
 
     # In preference order. First match that's actually registered wins.
-    _MCQ_PREFERENCE = ("predictive_entropy", "self_consistency", "self_reported")
-    _FREEFORM_PREFERENCE = ("semantic_entropy", "self_consistency", "self_reported")
+    _MCQ_PREFERENCE = ("predictive_entropy", "self_reported")
+    _FREEFORM_PREFERENCE = ("semantic_entropy", "semantic_entropy_embed", "self_reported")
 
     def __init__(self, sub_routers: dict[str, UncertaintyRouter]) -> None:
         # Avoid an infinite loop if `auto` is somehow handed itself.

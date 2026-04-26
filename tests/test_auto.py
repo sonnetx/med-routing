@@ -79,8 +79,8 @@ async def test_auto_delegates_to_semantic_entropy_on_free_form():
 
 
 async def test_auto_falls_back_when_preferred_unavailable():
-    """Without semantic_entropy registered, free-form should fall back to
-    self_consistency rather than crashing."""
+    """Without semantic_entropy or semantic_entropy_embed registered, free-form
+    should fall back to self_reported rather than crashing."""
     auto, _ = _make_auto(with_se=False)
     weak = make_completion("free-form answer")
     async def sampler(*, n, temperature):
@@ -88,7 +88,7 @@ async def test_auto_falls_back_when_preferred_unavailable():
     msgs = [{"role": "user", "content": "What is asthma?"}]
     res = await auto.score(messages=msgs, weak=weak, sampler=sampler)
     assert res.extras["auto_format"] == "free_form"
-    assert res.extras["auto_router"] == "self_consistency"
+    assert res.extras["auto_router"] == "self_reported"
 
 
 async def test_auto_returns_threshold_override_from_subrouter():

@@ -5,16 +5,19 @@ from ..llm.openai_client import OpenAIClient
 from .auto import AutoRouter
 from .base import UncertaintyRouter
 from .predictive_entropy import PredictiveEntropyRouter
-from .self_consistency import SelfConsistencyRouter
 from .self_reported import SelfReportedRouter
 from .semantic_entropy_embed import SemanticEntropyEmbedRouter
 
 
+# self_consistency intentionally not registered: scoring is exact-text-match
+# clustering, which is designed for short MCQ answers. on free-form clinical
+# Q&A every sample is unique, so the score saturates and the router is noise.
+# the implementation in routers/self_consistency.py is kept for the training
+# pipeline + tests.
 def build_routers(client: OpenAIClient) -> dict[str, UncertaintyRouter]:
     s = get_settings()
     routers: dict[str, UncertaintyRouter] = {
         SelfReportedRouter.name: SelfReportedRouter(client),
-        SelfConsistencyRouter.name: SelfConsistencyRouter(),
         PredictiveEntropyRouter.name: PredictiveEntropyRouter(),
         SemanticEntropyEmbedRouter.name: SemanticEntropyEmbedRouter(),
     }
