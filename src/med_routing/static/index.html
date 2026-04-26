@@ -123,6 +123,19 @@
   }
 
   .finals { margin-top: 18px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+  .grafana-cta-big[hidden] { display: none; }
+  .grafana-cta-big {
+    margin: 18px 0 4px; display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 16px 20px; background: linear-gradient(135deg, rgba(88,166,255,0.14), rgba(95,196,164,0.10));
+    border: 1px solid var(--accent); border-radius: 8px; color: var(--text);
+    text-decoration: none; transition: transform 80ms ease, background 120ms ease;
+  }
+  .grafana-cta-big:hover { background: linear-gradient(135deg, rgba(88,166,255,0.22), rgba(95,196,164,0.16)); transform: translateY(-1px); }
+  .grafana-cta-big .cta-text { display: flex; flex-direction: column; gap: 2px; }
+  .grafana-cta-big .cta-title { font-size: 15px; font-weight: 600; color: var(--accent); }
+  .grafana-cta-big .cta-sub   { font-size: 12px; color: var(--muted); }
+  .grafana-cta-big .cta-arrow { font-size: 22px; color: var(--accent); }
   .final-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
     border-left: 3px solid var(--accent-color, var(--border));
@@ -261,6 +274,14 @@
   <div id="grid"></div>
 
   <div class="finals" id="finals"></div>
+
+  <a id="post-run-cta" class="grafana-cta-big" href="{{GRAFANA_URL}}/d/med-routing" target="_blank" hidden>
+    <div class="cta-text">
+      <div class="cta-title">Open the live Grafana dashboard \u2192</div>
+      <div class="cta-sub">Cumulative savings, escalation rate, calibration, residency \u2014 updated in real time.</div>
+    </div>
+    <div class="cta-arrow">\u2197</div>
+  </a>
 
   <div id="err" class="err"></div>
 
@@ -490,6 +511,8 @@ function renderSkeleton() {
 }
 
 function resetUI() {
+  const cta = $('post-run-cta');
+  if (cta) cta.hidden = true;
   TIERS.forEach((_, i) => {
     const sh = $(`shared-${i}`);
     sh.querySelectorAll('[data-shared],[data-main],[data-samples]').forEach(s => s.textContent = '\u2014');
@@ -664,6 +687,8 @@ function handleEvent(type, d) {
       cell.querySelector('.extras').textContent = (d.error || '').slice(0, 80);
     }
   } else if (type === 'all_done') {
+    const cta = $('post-run-cta');
+    if (cta && cta.getAttribute('href') && !cta.getAttribute('href').startsWith('/d/')) cta.hidden = false;
   } else if (type === 'error') {
     $('err').textContent = `stream error: ${d.message || JSON.stringify(d)}`;
   }
