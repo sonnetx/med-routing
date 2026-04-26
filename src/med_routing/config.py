@@ -44,8 +44,9 @@ class Settings(BaseSettings):
     demo_data_dir: str = Field(default="demo_data", alias="DEMO_DATA_DIR")
 
     # external observability links shown in the static UIs. empty → hide link.
-    grafana_url: str = Field(default="http://localhost:3000", alias="GRAFANA_URL")
-    prometheus_url: str = Field(default="http://localhost:9090", alias="PROMETHEUS_URL")
+    # local dev sets these via .env; Railway inherits empty (no public Prom).
+    grafana_url: str = Field(default="", alias="GRAFANA_URL")
+    prometheus_url: str = Field(default="", alias="PROMETHEUS_URL")
 
     sample_n: int = Field(default=5, alias="SAMPLE_N")
     sample_temperature: float = Field(default=0.7, alias="SAMPLE_TEMPERATURE")
