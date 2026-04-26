@@ -342,6 +342,7 @@
           "unit": "percentunit",
           "min": 0,
           "max": 1,
+          "noValue": "no data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -403,6 +404,7 @@
           "decimals": 3,
           "min": 0,
           "max": 0.5,
+          "noValue": "no data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -808,7 +810,7 @@
       },
       "targets": [
         {
-          "expr": "medr_cost_usd_total",
+          "expr": "medr_cost_usd_total{model=~\"gpt-5\\\\.4.*\"}",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
@@ -824,6 +826,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "Token rate by model and kind",
+      "description": "Cascade tier traffic only. The judge model (gpt-4o-mini, used to grade /datasets evals) is excluded so this panel reflects routing economics, not eval overhead.",
       "gridPos": {
         "y": 46,
         "h": 8,
@@ -836,7 +839,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (model, kind) (rate(medr_tokens_total[5m]))",
+          "expr": "sum by (model, kind) (rate(medr_tokens_total{model=~\"gpt-5\\\\.4.*\"}[5m]))",
           "legendFormat": "{{model}} / {{kind}}",
           "refId": "A"
         }

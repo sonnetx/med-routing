@@ -122,7 +122,7 @@
     100% { box-shadow: 0 0 0 0   transparent; }
   }
 
-  .finals { margin-top: 18px; display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+  .finals { margin-top: 18px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
   .final-card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
     border-left: 3px solid var(--accent-color, var(--border));
