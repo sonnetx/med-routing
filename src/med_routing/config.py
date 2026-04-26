@@ -82,7 +82,7 @@ class Settings(BaseSettings):
         return [
             TierSpec("nano", self.tier_nano_model, 0.20, 1.25),
             TierSpec("mini", self.tier_mini_model, 0.75, 4.50),
-            TierSpec("base", self.tier_base_model, 2.50, 15.00),
+            TierSpec("all-strong", self.tier_base_model, 2.50, 15.00),
         ]
 
     def threshold_for(self, router_name: str) -> float:

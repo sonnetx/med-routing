@@ -247,11 +247,13 @@ class StreamingCascade:
             LATENCY_SECONDS.labels(router=metric, tier=final["tier_name"]).observe(elapsed)
             actual = per_router_actual[metric]
             ACTUAL_COST_BY_ROUTER.labels(router=metric).inc(actual)
-            # counterfactual = cost of answering this same prompt entirely at
-            # the top tier. token counts are stable across tiers (same prompt,
-            # similar completion length), so use the first visit's tokens.
+            # counterfactual = cost of running this same router methodology
+            # entirely at the top tier (one main call + N samples if sampler).
+            # otherwise sampler routers always look bad: actual includes
+            # sample calls, but a 1-call counterfactual would be 6× cheaper.
             ref_visit = visits[0]
-            counterfactual = cost_usd(
+            calls_per_visit = (1 + s.sample_n) if metric in SAMPLER_ROUTERS else 1
+            counterfactual = calls_per_visit * cost_usd(
                 top_model,
                 ref_visit["prompt_tokens"],
                 ref_visit["completion_tokens"],
@@ -304,10 +306,13 @@ class StreamingCascade:
                     "home_region": s.home_region,
                     "cross_border": any(is_cross_border(r, s.home_region) for r in regions_touched),
                     "cost_usd": per_router_actual[metric],
-                    "counterfactual_usd": cost_usd(
-                        top_model,
-                        visits[0]["prompt_tokens"],
-                        visits[0]["completion_tokens"],
+                    "counterfactual_usd": (
+                        ((1 + s.sample_n) if metric in SAMPLER_ROUTERS else 1)
+                        * cost_usd(
+                            top_model,
+                            visits[0]["prompt_tokens"],
+                            visits[0]["completion_tokens"],
+                        )
                     ),
                     "latency_ms": int(elapsed * 1000),
                 })

@@ -246,7 +246,7 @@
     {
       "id": 62,
       "type": "stat",
-      "title": "p95 latency \u2014 base (top tier)",
+      "title": "p95 latency \u2014 all-strong (top tier)",
       "gridPos": {
         "h": 4,
         "w": 6,
@@ -259,8 +259,8 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(medr_latency_seconds_bucket{tier=\"base\"}[5m])))",
-          "legendFormat": "base",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(medr_latency_seconds_bucket{tier=\"all-strong\"}[5m])))",
+          "legendFormat": "all-strong",
           "refId": "A",
           "instant": true
         }
@@ -617,7 +617,7 @@
       "id": 13,
       "type": "stat",
       "title": "\ud83d\udcb0 Total savings vs all-strong baseline",
-      "description": "How much we saved by routing some queries to the weak model instead of sending every query to GPT-4o.",
+      "description": "How much we saved by cascading uncertain queries up the tier ladder, vs. sending every query straight to the top tier (gpt-5.4).",
       "gridPos": {
         "h": 6,
         "w": 8,
@@ -677,7 +677,7 @@
       "id": 14,
       "type": "stat",
       "title": "Savings rate per router",
-      "description": "Fraction of all-strong cost saved by routing through this uncertainty router. 1.0 = always weak; 0 = always strong.",
+      "description": "Fraction of all-strong cost saved by routing through this uncertainty router. 1.0 = always commits at the cheapest tier; 0 = always escalates to top.",
       "gridPos": {
         "h": 6,
         "w": 8,
@@ -738,7 +738,7 @@
       "id": 15,
       "type": "timeseries",
       "title": "Actual vs counterfactual cumulative spend",
-      "description": "Solid lines: what we paid. Dashed lines: what we would have paid sending every query to GPT-4o. The gap is savings.",
+      "description": "Solid lines: what we paid. Dashed lines: what we would have paid sending every query straight to the top tier (gpt-5.4). The gap is savings.",
       "gridPos": {
         "h": 6,
         "w": 8,
