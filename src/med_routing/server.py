@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import random
 import time
@@ -142,9 +143,32 @@ if _STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
+def _render_static(filename: str) -> Response:
+    """Inline-template a static HTML file with the configured Grafana/Prometheus URLs.
+
+    Placeholders: {{GRAFANA_URL}} (substring) and {{GRAFANA_LINK}}/{{PROMETHEUS_LINK}}
+    (whole <a> tags — empty string when the URL isn't configured, to hide the link).
+    """
+    s = get_settings()
+    html_doc = (_STATIC_DIR / filename).read_text(encoding="utf-8")
+
+    def _link(url: str, label: str, extra_attrs: str = "") -> str:
+        if not url:
+            return ""
+        return f'<a href="{html.escape(url)}" target="_blank"{extra_attrs}>{label}</a>'
+
+    html_doc = (
+        html_doc
+        .replace("{{GRAFANA_URL}}", s.grafana_url or "")
+        .replace("{{GRAFANA_LINK}}", _link(s.grafana_url, "Grafana"))
+        .replace("{{PROMETHEUS_LINK}}", _link(s.prometheus_url, "Prometheus"))
+    )
+    return Response(content=html_doc, media_type="text/html")
+
+
 @app.get("/", include_in_schema=False)
-async def index() -> FileResponse:
-    return FileResponse(_STATIC_DIR / "index.html")
+async def index() -> Response:
+    return _render_static("index.html")
 
 
 @app.get("/health")
@@ -650,8 +674,8 @@ async def demo_dataset_preview() -> dict[str, Any]:
 
 
 @app.get("/datasets", include_in_schema=False)
-async def datasets_page() -> FileResponse:
-    return FileResponse(_STATIC_DIR / "datasets.html")
+async def datasets_page() -> Response:
+    return _render_static("datasets.html")
 
 
 @app.post("/v1/chat/completions")

@@ -220,8 +220,8 @@
   <div class="links">
     <a href="/datasets">Evaluate on your data</a>
     <a href="/docs" target="_blank">API docs</a>
-    <a href="http://localhost:3000" target="_blank">Grafana</a>
-    <a href="http://localhost:9090" target="_blank">Prometheus</a>
+    {{GRAFANA_LINK}}
+    {{PROMETHEUS_LINK}}
   </div>
 </header>
 
@@ -262,13 +262,6 @@
   <div id="grid"></div>
 
   <div class="finals" id="finals"></div>
-
-  <div class="totals">
-    <div class="stat"><span class="lbl">total cost (all metrics + shared)</span><span class="v" id="t-cost">&mdash;</span></div>
-    <div class="stat"><span class="lbl">always-base cost (no cascade)</span><span class="v" id="t-base">&mdash;</span></div>
-    <div class="stat"><span class="lbl">savings vs always-base</span><span class="v" id="t-sav">&mdash;</span></div>
-    <div class="stat"><span class="lbl">latency</span><span class="v" id="t-lat">&mdash;</span></div>
-  </div>
 
   <div id="err" class="err"></div>
 
@@ -361,9 +354,6 @@ const goBtn        = $('go');
 
 let TIERS = [];
 let METRICS = [];
-let totalCost = 0, totalLat = 0;
-let baselineInputTokens = 0;
-let baselineMaxOutputTokens = 0;
 let runStart = 0;
 
 function el(tag, opts) {
@@ -502,10 +492,6 @@ function renderSkeleton() {
 }
 
 function resetUI() {
-  totalCost = 0; totalLat = 0;
-  baselineInputTokens = 0; baselineMaxOutputTokens = 0;
-  ['t-cost','t-base','t-sav','t-lat'].forEach(id => $(id).textContent = '\u2014');
-  $('t-sav').style.color = '';
   TIERS.forEach((_, i) => {
     const sh = $(`shared-${i}`);
     sh.querySelectorAll('[data-shared],[data-main],[data-samples]').forEach(s => s.textContent = '\u2014');
@@ -670,14 +656,8 @@ function handleEvent(type, d) {
     });
   } else if (type === 'tier_main_done') {
     updateSharedCost(d.tier_index, 'main', d.cost);
-    totalCost += d.cost;
-    totalLat += d.latency;
-    if (baselineInputTokens === 0) baselineInputTokens = d.input_tokens;
-    if (d.output_tokens > baselineMaxOutputTokens) baselineMaxOutputTokens = d.output_tokens;
   } else if (type === 'tier_samples_done') {
     updateSharedCost(d.tier_index, 'samples', d.cost);
-    totalCost += d.cost;
-    totalLat += d.latency;
   } else if (type === 'metric_score') {
     setCellResult(d.metric, d.tier_index, d.score, d.threshold, d.escalate, d.extras);
   } else if (type === 'metric_committed') {
@@ -691,24 +671,9 @@ function handleEvent(type, d) {
       cell.querySelector('.extras').textContent = (d.error || '').slice(0, 80);
     }
   } else if (type === 'all_done') {
-    finalizeTotals();
   } else if (type === 'error') {
     $('err').textContent = `stream error: ${d.message || JSON.stringify(d)}`;
   }
-}
-
-function finalizeTotals() {
-  $('t-cost').textContent = `$${totalCost.toFixed(5)}`;
-  const base = TIERS[TIERS.length - 1];
-  const alwaysBase = baselineInputTokens * base.input_per_m / 1e6
-                   + baselineMaxOutputTokens * base.output_per_m / 1e6;
-  $('t-base').textContent = `$${alwaysBase.toFixed(5)}`;
-  if (alwaysBase > 0) {
-    const sav = (1 - totalCost / alwaysBase) * 100;
-    $('t-sav').textContent = `${sav.toFixed(1)}%`;
-    $('t-sav').style.color = sav > 0 ? 'var(--good)' : 'var(--bad)';
-  }
-  $('t-lat').textContent = `${((performance.now() - runStart)/1000).toFixed(2)}s`;
 }
 
 async function runCascade(prompt) {
