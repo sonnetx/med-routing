@@ -362,6 +362,8 @@ async def run_eval_sweep(
     store: "DatasetStore | None" = None,
     judge_cache_path: Path | str | None = None,
     aggregator: object | None = None,
+    progress_cb: "callable | None" = None,
+    limit: int | None = None,
 ) -> EvalReport:
     """Sweep thresholds for each requested router and return a Pareto report.
 
@@ -383,13 +385,20 @@ async def run_eval_sweep(
 
     # Pre-compute everything once. Run sequentially to avoid hammering the API
     # with too many concurrent requests during the demo.
+    rows_to_eval = dataset.rows[:limit] if (limit and limit > 0) else dataset.rows
     precomputed: list[_PerQuestion] = []
-    for row in dataset.rows:
+    n_total = len(rows_to_eval)
+    for i, row in enumerate(rows_to_eval):
         pq = await _precompute_one(
             row=row, client=client, cache=cache,
             routers=sweep_routers, judge=judge,
         )
         precomputed.append(pq)
+        if progress_cb is not None:
+            try:
+                progress_cb(i + 1, n_total)
+            except Exception:
+                pass
 
     # Auto-mode samples thresholds from each router's observed score distribution
     # at tier 0 (the most informative — escalation decisions start there). An

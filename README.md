@@ -78,3 +78,17 @@ Covers each router, the cache, and the cascade end-to-end with a stubbed OpenAI 
 - Chuang et al. *Confident or Seek Stronger: Exploring Uncertainty-Based On-device LLM Routing From Benchmarking to Generalization*. 2025. [arXiv:2502.04428](https://arxiv.org/abs/2502.04428)
 - [RouteLLM](https://github.com/lm-sys/RouteLLM) — wired in as the `routellm` baseline router (pretrained `mf` matrix-factorization classifier). The current four uncertainty routers should beat it on MedMCQA since RouteLLM's pretrained checkpoints are trained on general Chatbot Arena preferences, not medical content.
 - [MedMCQA](https://huggingface.co/datasets/openlifescienceai/medmcqa) — Apache 2.0 medical MCQ benchmark.
+
+
+
+
+https://docs.google.com/spreadsheets/d/1J-SINNkb0gIwcNnNawpRijTXEADaWx9WpyPQI-X_GCE/edit?gid=1988170623#gid=1988170623
+https://docs.google.com/document/d/1_UCyD2x3T1gNEinnOai3XbupErI4rZlK5uwPiWxRU9U/edit?tab=t.0
+https://github.com/sonnetx/med-routing
+https://platform.openai.com/settings/organization/usage
+https://app-production-c4cc.up.railway.app/
+https://app-production-c4cc.up.railway.app/datasets
+https://docs.google.com/document/d/1_UCyD2x3T1gNEinnOai3XbupErI4rZlK5uwPiWxRU9U/edit?tab=t.0
+https://grafana-production-a828.up.railway.app/d/med-routing-eval/med-routing-e28094-eval-dashboard?from=now-30m&to=now
+https://grafana-production-a828.up.railway.app/d/med-routing/med-routing-e28094-uncertainty-cascade?from=now-30m&to=now
+https://docs.google.com/presentation/d/14kMAqIn4M5pXx2Bs9EuiykycznvLdmgEwrc_bN_l81Y/edit?slide=id.g3d963976b8a_1_0#slide=id.g3d963976b8a_1_0

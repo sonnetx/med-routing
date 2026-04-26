@@ -177,6 +177,17 @@
       where a router's scores actually live and collapses the Pareto chart to a single point.
     </div>
 
+    <label style="margin-top:14px; display:flex; align-items:center; gap:10px">
+      <span>Row limit</span>
+      <input type="number" id="eval-limit" min="1" step="1"
+             placeholder="all" style="width: 90px; padding: 4px 8px;
+             background:#0d1117; color:inherit; border:1px solid #30363d; border-radius:4px" />
+      <span class="muted" style="font-size:11px">
+        cap how many questions to evaluate (blank = all <span id="eval-limit-max"></span>).
+        Partial runs aren't saved to disk.
+      </span>
+    </label>
+
     <div class="row" style="margin-top: 14px">
       <button id="btn-evaluate">Run evaluation</button>
       <span class="muted" id="eval-status"></span>
@@ -310,6 +321,8 @@ function renderPreviewRows(rows) {
 async function renderAfterUpload(ds) {
   $("ds-name").textContent = String(ds.name ?? "");
   $("ds-count").textContent = `${ds.n} questions`;
+  $("eval-limit").max = String(ds.n);
+  $("eval-limit-max").textContent = `= ${ds.n}`;
   renderPreviewRows(ds.rows);
 
   const costResp = await fetch(`/v1/datasets/${ds.id}/cost-estimate`);
@@ -446,16 +459,29 @@ async function evaluate() {
   $("eval-status").textContent = "running cascade × judge for each (question, router, threshold)...";
   $("eval-progress").style.display = "block";
   const bar = $("eval-progress").firstElementChild;
-  const total_estimate_s = 30 + 0.8 * 25;
-  const start = Date.now();
-  const interval = setInterval(() => {
-    const elapsed = (Date.now() - start) / 1000;
-    bar.style.width = Math.min(95, (elapsed / total_estimate_s) * 100) + "%";
-  }, 300);
+  // Poll the server for real per-question progress instead of a fake ticker.
+  // The server updates progress after each question's precompute completes.
+  const interval = setInterval(async () => {
+    try {
+      const r = await fetch(`/v1/datasets/${currentDatasetId}/evaluate-progress`);
+      if (!r.ok) return;
+      const p = await r.json();
+      if (p.total > 0) {
+        const pct = Math.min(99, (p.done / p.total) * 100);
+        bar.style.width = pct + "%";
+        $("eval-status").textContent =
+          p.stage === "done"
+            ? `aggregating results...`
+            : `evaluating ${p.done}/${p.total} questions...`;
+      }
+    } catch {}
+  }, 800);
   try {
+    const limitRaw = $("eval-limit").value.trim();
+    const limit = limitRaw ? Math.max(1, parseInt(limitRaw, 10) || 0) : null;
     const resp = await fetch(`/v1/datasets/${currentDatasetId}/evaluate`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ routers, thresholds }),
+      body: JSON.stringify({ routers, thresholds, limit }),
     });
     clearInterval(interval);
     bar.style.width = "100%";

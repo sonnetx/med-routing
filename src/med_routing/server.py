@@ -127,6 +127,8 @@ async def lifespan(app: FastAPI):
 
     app.state.openai_client = client
     app.state.cache = cache
+    # Per-dataset eval progress, polled by the UI for an honest progress bar.
+    app.state.eval_progress = {}
     yield
     # Save completion cache on shutdown so the latest in-memory state lands on disk.
     try:
@@ -528,6 +530,8 @@ class DatasetEvaluateRequest(BaseModel):
     # Empty list = auto-mode: thresholds are sampled from each router's own
     # observed score distribution. An explicit list is honored as-is.
     thresholds: list[float] = Field(default_factory=list)
+    # Cap rows actually evaluated; None or 0 = use all rows.
+    limit: int | None = None
 
 
 def _dataset_to_dict(ds: Any, *, with_rows: int | None = 0) -> dict[str, Any]:
@@ -633,6 +637,17 @@ async def dataset_evaluate(ds_id: str, payload: DatasetEvaluateRequest) -> dict[
     if not all(r.ground_truth for r in ds.rows):
         raise HTTPException(400, "dataset has rows without ground truth; generate first")
     s = get_settings()
+    effective_total = (
+        min(payload.limit, len(ds.rows)) if (payload.limit and payload.limit > 0) else len(ds.rows)
+    )
+    progress = {"done": 0, "total": effective_total, "stage": "precompute", "started_at": time.time()}
+    app.state.eval_progress[ds_id] = progress
+
+    def _cb(done: int, total: int) -> None:
+        progress["done"] = done
+        progress["total"] = total
+
+    is_partial = bool(payload.limit) and payload.limit < len(ds.rows)
     try:
         report = await run_eval_sweep(
             dataset=ds,
@@ -642,15 +657,30 @@ async def dataset_evaluate(ds_id: str, payload: DatasetEvaluateRequest) -> dict[
             router_names=payload.routers,
             thresholds=payload.thresholds,
             judge_model=s.judge_model,
-            store=app.state.dataset_store,
+            # Don't persist partial-run reports to disk — the deterministic
+            # dataset ID would otherwise serve a stale truncated report on
+            # re-upload of the same CSV.
+            store=None if is_partial else app.state.dataset_store,
             judge_cache_path=app.state.judge_cache_path,
             aggregator=app.state.aggregator,
+            progress_cb=_cb,
+            limit=payload.limit,
         )
         # Persist the completion cache too — biggest win for replay speed.
         app.state.cache.save(app.state.completion_cache_path)
+        progress["stage"] = "done"
     except ValueError as exc:
+        progress["stage"] = "error"
         raise HTTPException(400, str(exc))
     return ds.last_report or {}
+
+
+@app.get("/v1/datasets/{ds_id}/evaluate-progress")
+async def dataset_evaluate_progress(ds_id: str) -> dict[str, Any]:
+    p = app.state.eval_progress.get(ds_id)
+    if p is None:
+        return {"done": 0, "total": 0, "stage": "idle"}
+    return p
 
 
 @app.get("/v1/datasets/{ds_id}/report")
